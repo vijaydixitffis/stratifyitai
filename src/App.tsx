@@ -22,17 +22,17 @@ const AppContent: React.FC = () => {
         return <Dashboard />;
       case 'assets':
         return <AssetInventory />;
+      case 'assessments':
+        return <AssessmentsDashboard />;
       case 'analytics':
         return (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="text-center py-12">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4">Analytics Dashboard</h2>
-              <p className="text-gray-600">Advanced analytics and insights coming soon...</p>
+              <h2 className="text-2xl font-bold text-gray-900 mb-4">Strategy Insights</h2>
+              <p className="text-gray-600">Advanced strategic insights and analytics coming soon...</p>
             </div>
           </div>
         );
-      case 'assessments':
-        return <AssessmentsDashboard />;
       case 'clients':
         return (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

@@ -22,18 +22,18 @@ const Navigation: React.FC<NavigationProps> = ({ activeTab, onTabChange }) => {
   const clientTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'assets', label: 'Asset Inventory', icon: Database },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'assessments', label: 'Assessments', icon: Shield },
+    { id: 'analytics', label: 'Strategy Insights', icon: BarChart3 },
   ];
 
   const adminTabs = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'assets', label: 'Asset Inventory', icon: Database },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'assessments', label: 'Assessments', icon: Shield },
     { id: 'clients', label: 'Client Management', icon: Users },
     { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'analytics', label: 'Strategy Insights', icon: BarChart3 },
   ];
 
   const tabs = isAdmin ? adminTabs : clientTabs;
