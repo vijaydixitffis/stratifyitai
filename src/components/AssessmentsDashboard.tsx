@@ -333,18 +333,11 @@ const AssessmentsDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">IT Portfolio Assessments</h1>
-        <p className="mt-2 text-gray-600">
-          Comprehensive assessment framework for enterprise architecture transformation and IT strategy implementation
-        </p>
-      </div>
-
       {/* Assessment Framework Overview */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 mb-8">
         <div className="flex items-center mb-4">
           <Target className="h-8 w-8 text-blue-600 mr-3" />
-          <h2 className="text-xl font-bold text-blue-900">Future-ARCH Assessment Framework</h2>
+          <h2 className="text-xl font-bold text-blue-900">Assessment Framework</h2>
         </div>
         <p className="text-blue-800 mb-4">
           Our comprehensive assessment framework evaluates your IT portfolio across five key dimensions: 
