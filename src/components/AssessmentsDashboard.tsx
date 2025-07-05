@@ -333,6 +333,13 @@ const AssessmentsDashboard: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Portfolio Analysis</h1>
+        <p className="mt-2 text-gray-600">
+          Comprehensive assessment framework for enterprise architecture transformation and IT strategy implementation
+        </p>
+      </div>
+
       {/* Assessment Framework Overview */}
       <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 mb-8">
         <div className="flex items-center mb-4">
