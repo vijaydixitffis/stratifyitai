@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Shield, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Shield, Mail, Lock, AlertCircle, Database, Wifi, WifiOff } from 'lucide-react';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -41,7 +42,37 @@ const LoginForm: React.FC = () => {
           <p className="mt-2 text-sm text-gray-600">
             IT Portfolio Assessment & Analysis Platform
           </p>
+          
+          {/* Database Connection Status */}
+          <div className="mt-4 flex items-center justify-center">
+            {isSupabaseConfigured() ? (
+              <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
+                <Wifi className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-800">Database Connected</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-50 border border-orange-200 rounded-full">
+                <WifiOff className="h-4 w-4 text-orange-600" />
+                <span className="text-sm font-medium text-orange-800">Demo Mode</span>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Supabase Configuration Notice */}
+        {!isSupabaseConfigured() && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+            <div className="flex items-start space-x-3">
+              <Database className="h-5 w-5 text-amber-500 mt-0.5" />
+              <div>
+                <h3 className="text-sm font-medium text-amber-800">Database Setup Required</h3>
+                <p className="text-sm text-amber-700 mt-1">
+                  To connect to your Supabase database, update the .env file with your project credentials.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
           {error && (
@@ -98,27 +129,38 @@ const LoginForm: React.FC = () => {
           </button>
         </form>
 
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Demo Accounts</h3>
-          <div className="space-y-2">
-            {demoUsers.map((user) => (
-              <button
-                key={user.email}
-                onClick={() => {
-                  setEmail(user.email);
-                  setPassword('demo123');
-                }}
-                className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
-              >
-                <div className="font-medium text-gray-900">{user.email}</div>
-                <div className="text-sm text-gray-600">{user.role}</div>
-              </button>
-            ))}
+        {!isSupabaseConfigured() && (
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Demo Accounts</h3>
+            <div className="space-y-2">
+              {demoUsers.map((user) => (
+                <button
+                  key={user.email}
+                  onClick={() => {
+                    setEmail(user.email);
+                    setPassword('demo123');
+                  }}
+                  className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
+                >
+                  <div className="font-medium text-gray-900">{user.email}</div>
+                  <div className="text-sm text-gray-600">{user.role}</div>
+                </button>
+              ))}
+            </div>
+            <p className="mt-4 text-xs text-gray-500">
+              Click any demo account to auto-fill credentials (password: demo123)
+            </p>
           </div>
-          <p className="mt-4 text-xs text-gray-500">
-            Click any demo account to auto-fill credentials (password: demo123)
-          </p>
-        </div>
+        )}
+
+        {isSupabaseConfigured() && (
+          <div className="bg-white p-6 rounded-lg shadow-md">
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Database Connected</h3>
+            <p className="text-sm text-gray-600">
+              You can now sign up for a new account or sign in with existing credentials.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

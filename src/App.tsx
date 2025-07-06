@@ -7,10 +7,22 @@ import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
 import AssetInventory from './components/AssetInventory';
 import AssessmentsDashboard from './components/AssessmentsDashboard';
+import { Loader2 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+          <p className="text-gray-600">Loading application...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user) {
     return <LoginForm />;
