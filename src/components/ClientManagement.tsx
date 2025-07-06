@@ -15,17 +15,10 @@ import {
   CheckCircle,
   XCircle
 } from 'lucide-react';
-import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { UserService, UserProfile } from '../services/userService';
 
-interface ClientUser {
-  id: string;
-  name: string;
-  email: string;
-  role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
-  organization: string;
-  created_at: string;
-  status: 'active' | 'inactive';
-}
+// Use the UserProfile interface from the service
+type ClientUser = UserProfile;
 
 const ClientManagement: React.FC = () => {
   const { user } = useAuth();
@@ -42,7 +35,7 @@ const ClientManagement: React.FC = () => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'client-manager' as const,
+    role: 'client-manager' as 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super',
     organization: '',
     password: ''
   });
@@ -66,64 +59,12 @@ const ClientManagement: React.FC = () => {
   }, [isSuperAdmin]);
 
   const loadClients = async () => {
-    if (!isSupabaseConfigured() || !supabase) {
-      // Mock data for demo mode
-      setClients([
-        {
-          id: '1',
-          name: 'John Smith',
-          email: 'john@company.com',
-          role: 'client-manager',
-          organization: 'TechCorp Inc.',
-          created_at: '2024-01-15T10:00:00Z',
-          status: 'active'
-        },
-        {
-          id: '2',
-          name: 'Sarah Johnson',
-          email: 'sarah@company.com',
-          role: 'client-architect',
-          organization: 'TechCorp Inc.',
-          created_at: '2024-01-16T14:30:00Z',
-          status: 'active'
-        },
-        {
-          id: '3',
-          name: 'Mike Chen',
-          email: 'mike@stratifyit.ai',
-          role: 'admin-consultant',
-          organization: 'StratifyIT.ai',
-          created_at: '2024-01-10T09:15:00Z',
-          status: 'active'
-        },
-        {
-          id: '4',
-          name: 'Lisa Rodriguez',
-          email: 'lisa@stratifyit.ai',
-          role: 'admin-architect',
-          organization: 'StratifyIT.ai',
-          created_at: '2024-01-12T11:45:00Z',
-          status: 'active'
-        }
-      ]);
-      setLoading(false);
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
       
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw error;
-      }
-
-      setClients(data || []);
+      const users = await UserService.getUsers();
+      setClients(users);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load clients');
       console.error('Error loading clients:', err);
@@ -134,49 +75,21 @@ const ClientManagement: React.FC = () => {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!isSupabaseConfigured() || !supabase) {
-      // Mock creation for demo mode
-      const newClient: ClientUser = {
-        id: Date.now().toString(),
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        organization: formData.organization,
-        created_at: new Date().toISOString(),
-        status: 'active'
-      };
-      setClients(prev => [newClient, ...prev]);
-      setShowCreateForm(false);
-      resetForm();
-      return;
-    }
 
     try {
       setError(null);
       
-      // Create user in Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      const newUser = await UserService.createUser({
         email: formData.email,
         password: formData.password,
-        email_confirm: true,
-        user_metadata: {
-          name: formData.name,
-          role: formData.role,
-          organization: formData.organization
-        }
+        name: formData.name,
+        role: formData.role,
+        organization: formData.organization
       });
 
-      if (authError) {
-        throw authError;
-      }
-
-      if (authData.user) {
-        // Profile will be created automatically by the trigger
-        await loadClients();
-        setShowCreateForm(false);
-        resetForm();
-      }
+      setClients(prev => [newUser, ...prev]);
+      setShowCreateForm(false);
+      resetForm();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create client');
       console.error('Error creating client:', err);
@@ -188,35 +101,18 @@ const ClientManagement: React.FC = () => {
     
     if (!editingClient) return;
 
-    if (!isSupabaseConfigured() || !supabase) {
-      // Mock update for demo mode
-      setClients(prev => prev.map(client => 
-        client.id === editingClient.id 
-          ? { ...client, ...formData }
-          : client
-      ));
-      setEditingClient(null);
-      resetForm();
-      return;
-    }
-
     try {
       setError(null);
       
-      const { error } = await supabase
-        .from('user_profiles')
-        .update({
-          name: formData.name,
-          role: formData.role,
-          organization: formData.organization
-        })
-        .eq('id', editingClient.id);
+      const updatedUser = await UserService.updateUser(editingClient.id, {
+        name: formData.name,
+        role: formData.role,
+        organization: formData.organization
+      });
 
-      if (error) {
-        throw error;
-      }
-
-      await loadClients();
+      setClients(prev => prev.map(client => 
+        client.id === editingClient.id ? updatedUser : client
+      ));
       setEditingClient(null);
       resetForm();
     } catch (err) {
@@ -230,22 +126,11 @@ const ClientManagement: React.FC = () => {
       return;
     }
 
-    if (!isSupabaseConfigured() || !supabase) {
-      // Mock deletion for demo mode
-      setClients(prev => prev.filter(client => client.id !== clientId));
-      return;
-    }
-
     try {
       setError(null);
       
-      const { error } = await supabase.auth.admin.deleteUser(clientId);
-      
-      if (error) {
-        throw error;
-      }
-
-      await loadClients();
+      await UserService.deleteUser(clientId);
+      setClients(prev => prev.filter(client => client.id !== clientId));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete client');
       console.error('Error deleting client:', err);
@@ -381,6 +266,20 @@ const ClientManagement: React.FC = () => {
           <span className="text-sm text-red-800">{error}</span>
         </div>
       )}
+
+      {/* Admin API Notice */}
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+        <div className="flex items-start space-x-3">
+          <Shield className="h-5 w-5 text-amber-500 mt-0.5" />
+          <div>
+            <h3 className="text-sm font-medium text-amber-800">Admin API Setup Required</h3>
+            <p className="text-sm text-amber-700 mt-1">
+              For full user management capabilities, you need to set up a serverless function with the Supabase service role key. 
+              Currently, user creation and deletion are limited. Contact your system administrator for proper setup.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Create/Edit Form Modal */}
       {(showCreateForm || editingClient) && (
