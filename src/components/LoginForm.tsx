@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Shield, Mail, Lock, AlertCircle, Database, Wifi, WifiOff, UserPlus, User } from 'lucide-react';
+import { Shield, Mail, Lock, AlertCircle } from 'lucide-react';
 import { isSupabaseConfigured } from '../lib/supabase';
 
 const LoginForm: React.FC = () => {
@@ -44,37 +44,9 @@ const LoginForm: React.FC = () => {
           <p className="mt-2 text-sm text-gray-600">
             IT Portfolio Assessment & Analysis Platform
           </p>
-          
-          {/* Database Connection Status */}
-          <div className="mt-4 flex items-center justify-center">
-            {isSupabaseConfigured() ? (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
-                <Wifi className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">Database Connected</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-50 border border-orange-200 rounded-full">
-                <WifiOff className="h-4 w-4 text-orange-600" />
-                <span className="text-sm font-medium text-orange-800">Demo Mode</span>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Supabase Configuration Notice */}
-        {!isSupabaseConfigured() && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-            <div className="flex items-start space-x-3">
-              <Database className="h-5 w-5 text-amber-500 mt-0.5" />
-              <div>
-                <h3 className="text-sm font-medium text-amber-800">Database Setup Required</h3>
-                <p className="text-sm text-amber-700 mt-1">
-                  To connect to your Supabase database, update the .env file with your project credentials.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
 
@@ -157,22 +129,7 @@ const LoginForm: React.FC = () => {
           </div>
         )}
 
-        {isSupabaseConfigured() && (
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Database Connected</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Sign in with your existing credentials. New users can only be created by Super Admins through the Client Management panel.
-            </p>
-            
-            {/* Admin Instructions */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">User Management</h4>
-              <p className="text-xs text-blue-800">
-                Super Admins can create and manage users through the Client Management section in the admin panel.
-              </p>
-            </div>
-          </div>
-        )}
+
       </div>
     </div>
   );

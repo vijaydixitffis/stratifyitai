@@ -13,9 +13,13 @@ import {
   User,
   AlertCircle,
   CheckCircle,
-  XCircle
+  XCircle,
+  Plus,
+  Settings,
+  X
 } from 'lucide-react';
 import { UserService, UserProfile } from '../services/userService';
+import { OrganizationService, Organization } from '../services/organizationService';
 
 // Use the UserProfile interface from the service
 type ClientUser = UserProfile;
@@ -23,6 +27,7 @@ type ClientUser = UserProfile;
 const ClientManagement: React.FC = () => {
   const { user } = useAuth();
   const [clients, setClients] = useState<ClientUser[]>([]);
+  const [organizationsList, setOrganizationsList] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,6 +35,9 @@ const ClientManagement: React.FC = () => {
   const [selectedOrganization, setSelectedOrganization] = useState('all');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingClient, setEditingClient] = useState<ClientUser | null>(null);
+  const [showOnboardOrgForm, setShowOnboardOrgForm] = useState(false);
+  const [selectedOrgForUsers, setSelectedOrgForUsers] = useState<Organization | null>(null);
+  const [viewMode, setViewMode] = useState<'organizations' | 'users'>('organizations');
 
   // Form state for creating/editing clients
   const [formData, setFormData] = useState({
@@ -39,6 +47,26 @@ const ClientManagement: React.FC = () => {
     organization: '',
     password: ''
   });
+
+  // Form state for onboarding organizations
+  const [orgFormData, setOrgFormData] = useState({
+    organizationName: '',
+    orgCode: '',
+    description: '',
+    sector: '',
+    remarks: '',
+    cxoName: '',
+    cxoEmail: '',
+    cxoPassword: ''
+  });
+
+  // Form state for editing organizations
+  const [editingOrg, setEditingOrg] = useState<{
+    name: string;
+    code: string;
+    cxoName: string;
+    cxoId: string;
+  } | null>(null);
 
   const roleOptions = [
     { value: 'client-manager', label: 'Client Manager', description: 'Manages client projects and communications' },
@@ -55,6 +83,7 @@ const ClientManagement: React.FC = () => {
   useEffect(() => {
     if (isSuperAdmin) {
       loadClients();
+      loadOrganizations();
     }
   }, [isSuperAdmin]);
 
@@ -70,6 +99,18 @@ const ClientManagement: React.FC = () => {
       console.error('Error loading clients:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadOrganizations = async () => {
+    try {
+      setError(null);
+      
+      const orgs = await OrganizationService.getOrganizations();
+      setOrganizationsList(orgs);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load organizations');
+      console.error('Error loading organizations:', err);
     }
   };
 
@@ -168,7 +209,122 @@ const ClientManagement: React.FC = () => {
     return matchesSearch && matchesRole && matchesOrg;
   });
 
-  const organizations = Array.from(new Set(clients.map(client => client.organization)));
+  // This line is no longer needed since we're using organizationsList from the database
+
+  const handleOnboardOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // Validate org code length
+    if (orgFormData.orgCode.length !== 5) {
+      setError('Organization code must be exactly 5 characters');
+      return;
+    }
+
+    try {
+      setError(null);
+      
+      // First, create the organization
+      const newOrg = await OrganizationService.createOrganization({
+        org_code: orgFormData.orgCode,
+        org_name: orgFormData.organizationName,
+        description: orgFormData.description || `Organization for ${orgFormData.organizationName}`,
+        sector: orgFormData.sector || 'Technology',
+        remarks: orgFormData.remarks || 'Newly onboarded organization'
+      });
+
+      // Then create the Client CXO user for the organization
+      const newUser = await UserService.createUser({
+        email: orgFormData.cxoEmail,
+        password: orgFormData.cxoPassword,
+        name: orgFormData.cxoName,
+        role: 'client-cxo', // Client CXO role
+        organization: orgFormData.organizationName,
+        orgCode: orgFormData.orgCode,
+        org_id: newOrg.org_id
+      });
+
+      setOrganizationsList(prev => [newOrg, ...prev]);
+      setClients(prev => [newUser, ...prev]);
+      setShowOnboardOrgForm(false);
+      resetOrgForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to onboard organization');
+      console.error('Error onboarding organization:', err);
+    }
+  };
+
+  const handleEditOrganization = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrg) return;
+
+    // Validate org code length
+    if (editingOrg.code.length !== 5) {
+      setError('Organization code must be exactly 5 characters');
+      return;
+    }
+
+    try {
+      setError(null);
+      
+      // Find the organization to update
+      const orgToUpdate = organizationsList.find(org => org.org_code === editingOrg.code);
+      if (!orgToUpdate) {
+        throw new Error('Organization not found');
+      }
+
+      // Update the organization details
+      const updatedOrg = await OrganizationService.updateOrganization(orgToUpdate.org_id, {
+        org_code: editingOrg.code,
+        org_name: editingOrg.name
+      });
+
+      // Update the organizations list
+      setOrganizationsList(prev => prev.map(org => 
+        org.org_id === orgToUpdate.org_id ? updatedOrg : org
+      ));
+
+      setEditingOrg(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update organization');
+      console.error('Error updating organization:', err);
+    }
+  };
+
+  const openEditOrganization = (org: Organization) => {
+    setEditingOrg({
+      name: org.org_name,
+      code: org.org_code,
+      cxoName: '', // We'll need to find the CXO user for this org
+      cxoId: ''
+    });
+  };
+
+  const resetOrgForm = () => {
+    setOrgFormData({
+      organizationName: '',
+      orgCode: '',
+      description: '',
+      sector: '',
+      remarks: '',
+      cxoName: '',
+      cxoEmail: '',
+      cxoPassword: ''
+    });
+  };
+
+  const handleManageUsers = (organization: Organization) => {
+    setSelectedOrgForUsers(organization);
+    setViewMode('users');
+  };
+
+  const handleBackToOrganizations = () => {
+    setViewMode('organizations');
+    setSelectedOrgForUsers(null);
+  };
+
+  const getUsersForOrganization = (organization: Organization) => {
+    return clients.filter(client => client.org_id === organization.org_id);
+  };
 
   if (!isSuperAdmin) {
     return (
@@ -188,76 +344,87 @@ const ClientManagement: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Client Management</h1>
-          <p className="text-gray-600">Manage users and their roles across different organizations</p>
+          <p className="text-gray-600">Manage organizations and their users</p>
         </div>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-        >
-          <UserPlus className="h-4 w-4" />
-          <span>Add New Client</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={() => setShowOnboardOrgForm(true)}
+            className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Onboard an Organization</span>
+          </button>
+          <button
+            onClick={() => setShowCreateForm(true)}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus className="h-4 w-4" />
+            <span>Add New Client</span>
+          </button>
+        </div>
       </div>
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name, email, or organization..."
-                className="pl-10 w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-              />
+      {/* View Toggle */}
+      {viewMode === 'users' && selectedOrgForUsers && (
+        <div className="flex items-center justify-between">
+          <button
+            onClick={handleBackToOrganizations}
+            className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
+          >
+            <span>← Back to Organizations</span>
+          </button>
+          <h2 className="text-xl font-semibold text-gray-900">
+            Users in {selectedOrgForUsers?.org_name}
+          </h2>
+        </div>
+      )}
+
+      {/* Filters - Only show in users view */}
+      {viewMode === 'users' && (
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Search Users</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name or email..."
+                  className="pl-10 w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+              <select
+                value={selectedRole}
+                onChange={(e) => setSelectedRole(e.target.value)}
+                className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="all">All Roles</option>
+                {roleOptions.map(role => (
+                  <option key={role.value} value={role.value}>{role.label}</option>
+                ))}
+              </select>
+            </div>
+            
+            <div className="flex items-end">
+              <button
+                onClick={() => {
+                  setSearchQuery('');
+                  setSelectedRole('all');
+                }}
+                className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                Clear Filters
+              </button>
             </div>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-            <select
-              value={selectedRole}
-              onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Roles</option>
-              {roleOptions.map(role => (
-                <option key={role.value} value={role.value}>{role.label}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
-            <select
-              value={selectedOrganization}
-              onChange={(e) => setSelectedOrganization(e.target.value)}
-              className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Organizations</option>
-              {organizations.map(org => (
-                <option key={org} value={org}>{org}</option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedRole('all');
-                setSelectedOrganization('all');
-              }}
-              className="w-full bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 transition-colors"
-            >
-              Clear Filters
-            </button>
-          </div>
         </div>
-      </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -375,114 +542,435 @@ const ClientManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Clients List */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        {loading ? (
-          <div className="p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">Loading clients...</p>
+      {/* Onboard Organization Modal */}
+      {showOnboardOrgForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-bold mb-4">Onboard an Organization</h2>
+            
+            <form onSubmit={handleOnboardOrganization} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
+                <input
+                  type="text"
+                  value={orgFormData.organizationName}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, organizationName: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter organization name"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Org Code</label>
+                <input
+                  type="text"
+                  value={orgFormData.orgCode}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase().slice(0, 5); // Ensure max 5 characters
+                    setOrgFormData({ ...orgFormData, orgCode: value });
+                  }}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter 5-character code"
+                  required
+                  maxLength={5}
+                  minLength={5}
+                />
+                {orgFormData.orgCode.length > 0 && orgFormData.orgCode.length < 5 && (
+                  <p className="text-sm text-red-600 mt-1">Org code must be exactly 5 characters</p>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={orgFormData.description}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, description: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter organization description"
+                  rows={3}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Sector</label>
+                <input
+                  type="text"
+                  value={orgFormData.sector}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, sector: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter sector (e.g., Technology, Finance)"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                <textarea
+                  value={orgFormData.remarks}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, remarks: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter any additional remarks"
+                  rows={2}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client CXO Name</label>
+                <input
+                  type="text"
+                  value={orgFormData.cxoName}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, cxoName: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter Client CXO full name"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client CXO Email</label>
+                <input
+                  type="email"
+                  value={orgFormData.cxoEmail}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, cxoEmail: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter Client CXO email"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client CXO Password</label>
+                <input
+                  type="password"
+                  value={orgFormData.cxoPassword}
+                  onChange={(e) => setOrgFormData({ ...orgFormData, cxoPassword: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter Client CXO password"
+                  required
+                  minLength={6}
+                />
+              </div>
+              
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Onboard Organization
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOnboardOrgForm(false);
+                    resetOrgForm();
+                  }}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
-        ) : filteredClients.length === 0 ? (
-          <div className="p-8 text-center">
-            <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No clients found</h3>
-            <p className="text-gray-600">Try adjusting your search criteria or add a new client.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Organization
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Created
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredClients.map((client) => (
-                  <tr key={client.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
-                            <User className="h-5 w-5 text-blue-600" />
-                          </div>
-                        </div>
-                        <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{client.name}</div>
-                          <div className="text-sm text-gray-500">{client.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Shield className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">
-                          {roleOptions.find(r => r.value === client.role)?.label || client.role}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <Building className="h-4 w-4 text-gray-400 mr-2" />
-                        <span className="text-sm text-gray-900">{client.organization}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        client.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {client.status === 'active' ? (
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                        ) : (
-                          <XCircle className="h-3 w-3 mr-1" />
-                        )}
-                        {client.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(client.created_at).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => openEditForm(client)}
-                          className="text-blue-600 hover:text-blue-900 transition-colors"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClient(client.id)}
-                          className="text-red-600 hover:text-red-900 transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
+        </div>
+      )}
+
+      {/* Main Content */}
+      {viewMode === 'organizations' ? (
+        /* Organizations List */
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading organizations...</p>
+            </div>
+          ) : organizationsList.length === 0 ? (
+            <div className="p-8 text-center">
+              <Building className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No organizations found</h3>
+              <p className="text-gray-600">Onboard your first organization to get started.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Organization
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Org Code
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Sector
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Users Count
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Active Users
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Created
+                    </th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {organizationsList.map((org) => {
+                    const orgUsers = getUsersForOrganization(org);
+                    const activeUsers = orgUsers.filter(user => user.status === 'active');
+                    const firstUser = orgUsers[0]; // For creation date
+                    
+                    return (
+                      <tr key={org.org_id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
+                                <Building className="h-5 w-5 text-green-600" />
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{org.org_name}</div>
+                              <div className="text-sm text-gray-500">{orgUsers.length} total users</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {org.org_code}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-900">{org.sector || 'N/A'}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-900">{orgUsers.length}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm text-gray-900">{activeUsers.length}</span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {firstUser ? new Date(firstUser.created_at).toLocaleDateString() : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => openEditOrganization(org)}
+                              className="text-gray-600 hover:text-gray-900 transition-colors"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleManageUsers(org)}
+                              className="flex items-center space-x-2 text-blue-600 hover:text-blue-900 transition-colors"
+                            >
+                              <Settings className="h-4 w-4" />
+                              <span>Manage Users</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      ) : (
+        /* Users List for Selected Organization */
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading users...</p>
+            </div>
+          ) : (() => {
+            const orgUsers = getUsersForOrganization(selectedOrgForUsers!);
+            const filteredOrgUsers = orgUsers.filter(client => {
+              const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                   client.email.toLowerCase().includes(searchQuery.toLowerCase());
+              const matchesRole = selectedRole === 'all' || client.role === selectedRole;
+              
+              return matchesSearch && matchesRole;
+            });
+
+            return filteredOrgUsers.length === 0 ? (
+              <div className="p-8 text-center">
+                <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No users found</h3>
+                <p className="text-gray-600">Try adjusting your search criteria or add a new user.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        User
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Created
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredOrgUsers.map((client) => (
+                      <tr key={client.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <User className="h-5 w-5 text-blue-600" />
+                              </div>
+                            </div>
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">{client.name}</div>
+                              <div className="text-sm text-gray-500">{client.email}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <Shield className="h-4 w-4 text-gray-400 mr-2" />
+                            <span className="text-sm text-gray-900">
+                              {roleOptions.find(r => r.value === client.role)?.label || client.role}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            client.status === 'active' 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {client.status === 'active' ? (
+                              <CheckCircle className="h-3 w-3 mr-1" />
+                            ) : (
+                              <XCircle className="h-3 w-3 mr-1" />
+                            )}
+                            {client.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(client.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => openEditForm(client)}
+                              className="text-blue-600 hover:text-blue-900 transition-colors"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClient(client.id)}
+                              className="text-red-600 hover:text-red-900 transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Edit Organization Modal */}
+      {editingOrg && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-900">Edit Organization</h2>
+              <button
+                onClick={() => setEditingOrg(null)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditOrganization} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
+                <input
+                  type="text"
+                  value={editingOrg.name}
+                  onChange={(e) => setEditingOrg({ ...editingOrg, name: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter organization name"
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Org Code</label>
+                <input
+                  type="text"
+                  value={editingOrg.code}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase().slice(0, 5); // Ensure max 5 characters
+                    setEditingOrg({ ...editingOrg, code: value });
+                  }}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter 5-character code"
+                  required
+                  maxLength={5}
+                  minLength={5}
+                />
+                {editingOrg.code.length > 0 && editingOrg.code.length < 5 && (
+                  <p className="text-sm text-red-600 mt-1">Org code must be exactly 5 characters</p>
+                )}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Client CXO Name</label>
+                <input
+                  type="text"
+                  value={editingOrg.cxoName}
+                  onChange={(e) => setEditingOrg({ ...editingOrg, cxoName: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter Client CXO name"
+                  required
+                />
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setEditingOrg(null)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                >
+                  Update Organization
+                </button>
+              </div>
+            </form>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 };

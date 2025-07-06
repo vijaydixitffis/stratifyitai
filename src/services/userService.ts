@@ -6,6 +6,8 @@ export interface CreateUserRequest {
   name: string;
   role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
   organization: string;
+  orgCode?: string;
+  org_id?: number;
 }
 
 export interface UserProfile {
@@ -14,6 +16,8 @@ export interface UserProfile {
   email: string;
   role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
   organization: string;
+  orgCode?: string;
+  org_id?: number;
   created_at: string;
   status: 'active' | 'inactive';
 }
@@ -29,6 +33,8 @@ export class UserService {
           email: 'john@company.com',
           role: 'client-manager',
           organization: 'TechCorp Inc.',
+          orgCode: 'TECH1',
+          org_id: 1,
           created_at: '2024-01-15T10:00:00Z',
           status: 'active'
         },
@@ -38,6 +44,8 @@ export class UserService {
           email: 'sarah@company.com',
           role: 'client-architect',
           organization: 'TechCorp Inc.',
+          orgCode: 'TECH1',
+          org_id: 1,
           created_at: '2024-01-16T14:30:00Z',
           status: 'active'
         },
@@ -47,6 +55,8 @@ export class UserService {
           email: 'mike@stratifyit.ai',
           role: 'admin-consultant',
           organization: 'StratifyIT.ai',
+          orgCode: 'STRAT',
+          org_id: 2,
           created_at: '2024-01-10T09:15:00Z',
           status: 'active'
         },
@@ -56,6 +66,8 @@ export class UserService {
           email: 'lisa@stratifyit.ai',
           role: 'admin-architect',
           organization: 'StratifyIT.ai',
+          orgCode: 'STRAT',
+          org_id: 2,
           created_at: '2024-01-12T11:45:00Z',
           status: 'active'
         }
@@ -72,7 +84,12 @@ export class UserService {
         throw error;
       }
 
-      return data || [];
+      // Map the database fields to our interface
+      return (data || []).map(user => ({
+        ...user,
+        orgCode: user.org_code, // Map org_code to orgCode for consistency
+        org_id: user.org_id
+      }));
     } catch (error) {
       console.error('Error fetching users:', error);
       throw new Error('Failed to fetch users');
@@ -88,6 +105,8 @@ export class UserService {
         email: userData.email,
         role: userData.role,
         organization: userData.organization,
+        orgCode: userData.orgCode,
+        org_id: userData.org_id,
         created_at: new Date().toISOString(),
         status: 'active'
       };
@@ -104,7 +123,9 @@ export class UserService {
           data: {
             name: userData.name,
             role: userData.role,
-            organization: userData.organization
+            organization: userData.organization,
+            orgCode: userData.orgCode,
+            org_id: userData.org_id
           }
         }
       });
@@ -125,6 +146,8 @@ export class UserService {
         email: userData.email,
         role: userData.role,
         organization: userData.organization,
+        orgCode: userData.orgCode,
+        org_id: userData.org_id,
         created_at: new Date().toISOString(),
         status: 'active'
       };
@@ -145,6 +168,7 @@ export class UserService {
         email: updates.email || '',
         role: updates.role || 'client-manager',
         organization: updates.organization || '',
+        orgCode: updates.orgCode,
         created_at: new Date().toISOString(),
         status: updates.status || 'active'
       };
@@ -152,23 +176,43 @@ export class UserService {
     }
 
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .update({
-          name: updates.name,
-          role: updates.role,
-          organization: updates.organization,
-          status: updates.status
-        })
-        .eq('id', userId)
-        .select()
-        .single();
+      // Only update fields that we know exist in the database
+      const updateData: any = {};
+      
+      if (updates.name !== undefined) updateData.name = updates.name;
+      if (updates.role !== undefined) updateData.role = updates.role;
+      if (updates.organization !== undefined) updateData.organization = updates.organization;
+      if (updates.status !== undefined) updateData.status = updates.status;
+      if (updates.org_id !== undefined) updateData.org_id = updates.org_id;
 
-      if (error) {
-        throw error;
+      // Only proceed with main update if there are fields to update
+      if (Object.keys(updateData).length > 0) {
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .update(updateData)
+          .eq('id', userId)
+          .select()
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        return data;
+      } else {
+        // If no main fields to update, just return the current user data
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select()
+          .eq('id', userId)
+          .single();
+
+        if (error) {
+          throw error;
+        }
+
+        return data;
       }
-
-      return data;
     } catch (error) {
       console.error('Error updating user:', error);
       throw new Error('Failed to update user');
