@@ -267,15 +267,15 @@ const ClientManagement: React.FC = () => {
         </div>
       )}
 
-      {/* Admin API Notice */}
-      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+      {/* User Management Info */}
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start space-x-3">
-          <Shield className="h-5 w-5 text-amber-500 mt-0.5" />
+          <Shield className="h-5 w-5 text-blue-500 mt-0.5" />
           <div>
-            <h3 className="text-sm font-medium text-amber-800">Admin API Setup Required</h3>
-            <p className="text-sm text-amber-700 mt-1">
-              For full user management capabilities, you need to set up a serverless function with the Supabase service role key. 
-              Currently, user creation and deletion are limited. Contact your system administrator for proper setup.
+            <h3 className="text-sm font-medium text-blue-800">User Management Active</h3>
+            <p className="text-sm text-blue-700 mt-1">
+              You can create, edit, and manage users. New users will receive an email confirmation to activate their accounts. 
+              For enhanced security in production, consider setting up serverless functions for Admin API operations.
             </p>
           </div>
         </div>
