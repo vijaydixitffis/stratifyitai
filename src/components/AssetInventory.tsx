@@ -17,10 +17,13 @@ import {
   Package,
   Loader2,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import AssetForm from './AssetForm';
 import AssetUpload from './AssetUpload';
+import { isSupabaseConfigured } from '../lib/supabase';
 
 const AssetInventory: React.FC = () => {
   const { 
@@ -124,11 +127,52 @@ const AssetInventory: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Asset Inventory</h1>
-        <p className="mt-2 text-gray-600">
-          Manage your IT assets, upload inventories, and track portfolio status
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Asset Inventory</h1>
+            <p className="mt-2 text-gray-600">
+              Manage your IT assets, upload inventories, and track portfolio status
+            </p>
+          </div>
+          
+          {/* Connection Status Indicator */}
+          <div className="flex items-center space-x-2">
+            {isSupabaseConfigured() ? (
+              <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
+                <Wifi className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-800">Connected to Database</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-50 border border-orange-200 rounded-full">
+                <WifiOff className="h-4 w-4 text-orange-600" />
+                <span className="text-sm font-medium text-orange-800">Using Mock Data</span>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* Supabase Configuration Warning */}
+      {!isSupabaseConfigured() && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+          <div className="flex items-start space-x-3">
+            <AlertCircle className="h-5 w-5 text-amber-500 mt-0.5" />
+            <div>
+              <h3 className="text-sm font-medium text-amber-800">Database Not Connected</h3>
+              <p className="text-sm text-amber-700 mt-1">
+                You're currently viewing mock data. To connect to your Supabase database:
+              </p>
+              <ol className="text-sm text-amber-700 mt-2 ml-4 list-decimal space-y-1">
+                <li>Go to your Supabase dashboard for project "STRATIFYDB"</li>
+                <li>Navigate to Settings → API</li>
+                <li>Copy your Project URL and anon/public key</li>
+                <li>Update the .env file with your credentials</li>
+                <li>Restart the development server</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Display */}
       {error && (
@@ -275,6 +319,11 @@ const AssetInventory: React.FC = () => {
               : 'Get started by adding your first asset or uploading a spreadsheet'
             }
           </p>
+          {!isSupabaseConfigured() && (
+            <p className="text-sm text-amber-600 mt-2">
+              Connect to Supabase to see your database assets
+            </p>
+          )}
         </div>
       )}
 

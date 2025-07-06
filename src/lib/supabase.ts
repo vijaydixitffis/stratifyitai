@@ -4,13 +4,18 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase environment variables not found. Using mock data mode.');
-  // For development without Supabase, we'll handle this gracefully
+  console.warn('⚠️ Supabase environment variables not found. Using mock data mode.');
+  console.warn('Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file');
 }
 
 export const supabase = supabaseUrl && supabaseAnonKey 
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
+
+// Check if Supabase is properly configured
+export const isSupabaseConfigured = () => {
+  return supabase !== null;
+};
 
 // Database types
 export interface Database {
