@@ -1,10 +1,68 @@
 import { supabase } from '../lib/supabase';
 import { Asset } from '../types';
 
+// Mock data for when Supabase is not configured
+const mockAssets: Asset[] = [
+  {
+    id: '1',
+    name: 'Customer Portal',
+    type: 'application',
+    category: 'Web Application',
+    description: 'Main customer-facing portal for account management',
+    owner: 'IT Department',
+    status: 'active',
+    criticality: 'high',
+    lastUpdated: '2024-01-15',
+    createdBy: 'john@company.com',
+    tags: ['web', 'customer', 'portal'],
+    metadata: { version: '2.1.0', framework: 'React' }
+  },
+  {
+    id: '2',
+    name: 'Production Database',
+    type: 'database',
+    category: 'RDBMS (PostgreSQL)',
+    description: 'Primary production database for customer data',
+    owner: 'Database Team',
+    status: 'active',
+    criticality: 'high',
+    lastUpdated: '2024-01-12',
+    createdBy: 'sarah@company.com',
+    tags: ['database', 'production', 'postgresql'],
+    metadata: { version: '14.2', size: '2.5TB' }
+  },
+  {
+    id: '3',
+    name: 'AWS EC2 Instances',
+    type: 'infrastructure',
+    category: 'Virtual Machine',
+    description: 'Production web servers on AWS',
+    owner: 'DevOps Team',
+    status: 'active',
+    criticality: 'high',
+    lastUpdated: '2024-01-10',
+    createdBy: 'mike@stratifyit.ai',
+    tags: ['aws', 'ec2', 'compute'],
+    metadata: { instanceCount: 5, region: 'us-west-2' }
+  }
+];
+
+let mockAssetStore = [...mockAssets];
+
 export class AssetService {
+  // Check if Supabase is available
+  private static isSupabaseAvailable(): boolean {
+    return supabase !== null;
+  }
+
   // Fetch all assets
   static async getAssets(): Promise<Asset[]> {
-    const { data, error } = await supabase
+    if (!this.isSupabaseAvailable()) {
+      // Return mock data when Supabase is not configured
+      return Promise.resolve([...mockAssetStore]);
+    }
+
+    const { data, error } = await supabase!
       .from('assets')
       .select('*')
       .order('created_at', { ascending: false });
@@ -19,7 +77,18 @@ export class AssetService {
 
   // Create a new asset
   static async createAsset(asset: Omit<Asset, 'id' | 'lastUpdated'>): Promise<Asset> {
-    const { data, error } = await supabase
+    if (!this.isSupabaseAvailable()) {
+      // Mock implementation
+      const newAsset: Asset = {
+        ...asset,
+        id: Date.now().toString(),
+        lastUpdated: new Date().toISOString().split('T')[0]
+      };
+      mockAssetStore.unshift(newAsset);
+      return Promise.resolve(newAsset);
+    }
+
+    const { data, error } = await supabase!
       .from('assets')
       .insert([this.transformAssetToDB(asset)])
       .select()
@@ -35,7 +104,22 @@ export class AssetService {
 
   // Update an existing asset
   static async updateAsset(id: string, updates: Partial<Asset>): Promise<Asset> {
-    const { data, error } = await supabase
+    if (!this.isSupabaseAvailable()) {
+      // Mock implementation
+      const index = mockAssetStore.findIndex(a => a.id === id);
+      if (index === -1) {
+        throw new Error('Asset not found');
+      }
+      const updatedAsset = {
+        ...mockAssetStore[index],
+        ...updates,
+        lastUpdated: new Date().toISOString().split('T')[0]
+      };
+      mockAssetStore[index] = updatedAsset;
+      return Promise.resolve(updatedAsset);
+    }
+
+    const { data, error } = await supabase!
       .from('assets')
       .update(this.transformAssetToDB(updates))
       .eq('id', id)
@@ -52,7 +136,13 @@ export class AssetService {
 
   // Delete an asset
   static async deleteAsset(id: string): Promise<void> {
-    const { error } = await supabase
+    if (!this.isSupabaseAvailable()) {
+      // Mock implementation
+      mockAssetStore = mockAssetStore.filter(a => a.id !== id);
+      return Promise.resolve();
+    }
+
+    const { error } = await supabase!
       .from('assets')
       .delete()
       .eq('id', id);
@@ -65,7 +155,27 @@ export class AssetService {
 
   // Search assets
   static async searchAssets(query: string, type?: string): Promise<Asset[]> {
-    let queryBuilder = supabase
+    if (!this.isSupabaseAvailable()) {
+      // Mock implementation
+      let filtered = [...mockAssetStore];
+      
+      if (query) {
+        const lowerQuery = query.toLowerCase();
+        filtered = filtered.filter(asset =>
+          asset.name.toLowerCase().includes(lowerQuery) ||
+          asset.description.toLowerCase().includes(lowerQuery) ||
+          asset.owner.toLowerCase().includes(lowerQuery)
+        );
+      }
+      
+      if (type && type !== 'all') {
+        filtered = filtered.filter(asset => asset.type === type);
+      }
+      
+      return Promise.resolve(filtered);
+    }
+
+    let queryBuilder = supabase!
       .from('assets')
       .select('*');
 
@@ -133,6 +243,11 @@ export class AssetService {
 export class AssetUploadService {
   // Create upload record
   static async createUpload(fileName: string, fileSize: number): Promise<string> {
+    if (!supabase) {
+      // Mock implementation
+      return Promise.resolve(Date.now().toString());
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     
     const { data, error } = await supabase
@@ -159,6 +274,11 @@ export class AssetUploadService {
     progress: number, 
     status?: 'pending' | 'processing' | 'completed' | 'failed'
   ): Promise<void> {
+    if (!supabase) {
+      // Mock implementation
+      return Promise.resolve();
+    }
+
     const updates: any = { progress };
     
     if (status) {
@@ -187,6 +307,11 @@ export class AssetUploadService {
     errorRows: number,
     errors: any[]
   ): Promise<void> {
+    if (!supabase) {
+      // Mock implementation
+      return Promise.resolve();
+    }
+
     const { error } = await supabase
       .from('asset_uploads')
       .update({
@@ -207,6 +332,11 @@ export class AssetUploadService {
 
   // Get user uploads
   static async getUserUploads(): Promise<any[]> {
+    if (!supabase) {
+      // Mock implementation
+      return Promise.resolve([]);
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     
     const { data, error } = await supabase
