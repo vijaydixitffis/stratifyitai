@@ -5,6 +5,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, name: string, role?: string, organization?: string) => Promise<void>;
   logout: () => void;
   isClient: boolean;
   isAdmin: boolean;
@@ -58,15 +59,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           if (session?.user) {
-            // Convert Supabase user to our User type
-            const appUser: User = {
-              id: session.user.id,
-              name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-              email: session.user.email || '',
-              role: session.user.user_metadata?.role || 'client-manager',
-              organization: session.user.user_metadata?.organization || 'Default Organization'
-            };
-            setUser(appUser);
+            await loadUserProfile(session.user.id);
           } else {
             setUser(null);
           }
@@ -80,19 +73,40 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
+  const loadUserProfile = async (userId: string) => {
+    try {
+      const { data: profile, error } = await supabase!
+        .from('user_profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error loading user profile:', error);
+        return;
+      }
+
+      if (profile) {
+        const appUser: User = {
+          id: profile.id,
+          name: profile.name,
+          email: '', // We'll get this from auth.users if needed
+          role: profile.role,
+          organization: profile.organization
+        };
+        setUser(appUser);
+      }
+    } catch (error) {
+      console.error('Error in loadUserProfile:', error);
+    }
+  };
+
   const checkUser = async () => {
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          const appUser: User = {
-            id: session.user.id,
-            name: session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'User',
-            email: session.user.email || '',
-            role: session.user.user_metadata?.role || 'client-manager',
-            organization: session.user.user_metadata?.organization || 'Default Organization'
-          };
-          setUser(appUser);
+          await loadUserProfile(session.user.id);
         }
       } catch (error) {
         console.error('Error checking user session:', error);
@@ -114,14 +128,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       if (data.user) {
-        const appUser: User = {
-          id: data.user.id,
-          name: data.user.user_metadata?.name || data.user.email?.split('@')[0] || 'User',
-          email: data.user.email || '',
-          role: data.user.user_metadata?.role || 'client-manager',
-          organization: data.user.user_metadata?.organization || 'Default Organization'
-        };
-        setUser(appUser);
+        await loadUserProfile(data.user.id);
       }
     } else {
       // Mock authentication for demo
@@ -131,6 +138,39 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       } else {
         throw new Error('Invalid credentials. Use demo123 as password for demo accounts.');
       }
+    }
+  };
+
+  const signup = async (
+    email: string, 
+    password: string, 
+    name: string, 
+    role: string = 'client-manager',
+    organization: string = 'Default Organization'
+  ) => {
+    if (!isSupabaseConfigured() || !supabase) {
+      throw new Error('Signup is only available when connected to Supabase');
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name,
+          role,
+          organization
+        }
+      }
+    });
+
+    if (error) {
+      throw new Error(error.message);
+    }
+
+    if (data.user) {
+      // Profile will be created automatically by the trigger
+      await loadUserProfile(data.user.id);
     }
   };
 
@@ -145,7 +185,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const isAdmin = user?.role.startsWith('admin') || false;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isClient, isAdmin, loading }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, isClient, isAdmin, loading }}>
       {children}
     </AuthContext.Provider>
   );
