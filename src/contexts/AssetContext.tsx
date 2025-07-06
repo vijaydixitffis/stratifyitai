@@ -1,159 +1,169 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Asset, AssetUpload } from '../types';
+import { AssetService, AssetUploadService } from '../services/assetService';
 
 interface AssetContextType {
   assets: Asset[];
-  addAsset: (asset: Omit<Asset, 'id' | 'lastUpdated'>) => void;
-  updateAsset: (id: string, updates: Partial<Asset>) => void;
-  deleteAsset: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+  addAsset: (asset: Omit<Asset, 'id' | 'lastUpdated'>) => Promise<void>;
+  updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
+  deleteAsset: (id: string) => Promise<void>;
   uploadAssets: (file: File) => Promise<void>;
   uploads: AssetUpload[];
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   selectedType: string;
   setSelectedType: (type: string) => void;
+  refreshAssets: () => Promise<void>;
 }
 
 const AssetContext = createContext<AssetContextType | undefined>(undefined);
 
-// Mock assets for demonstration
-const mockAssets: Asset[] = [
-  {
-    id: '1',
-    name: 'Customer Portal',
-    type: 'application',
-    category: 'Web Application',
-    description: 'Main customer-facing portal for account management',
-    owner: 'IT Department',
-    status: 'active',
-    criticality: 'high',
-    lastUpdated: '2024-01-15',
-    createdBy: 'john@company.com',
-    tags: ['web', 'customer', 'portal'],
-    metadata: { version: '2.1.0', framework: 'React' }
-  },
-  {
-    id: '2',
-    name: 'Production Database',
-    type: 'database',
-    category: 'PostgreSQL',
-    description: 'Primary production database for customer data',
-    owner: 'Database Team',
-    status: 'active',
-    criticality: 'high',
-    lastUpdated: '2024-01-12',
-    createdBy: 'sarah@company.com',
-    tags: ['database', 'production', 'postgresql'],
-    metadata: { version: '14.2', size: '2.5TB' }
-  },
-  {
-    id: '3',
-    name: 'AWS EC2 Instances',
-    type: 'infrastructure',
-    category: 'Compute',
-    description: 'Production web servers on AWS',
-    owner: 'DevOps Team',
-    status: 'active',
-    criticality: 'high',
-    lastUpdated: '2024-01-10',
-    createdBy: 'mike@stratifyit.ai',
-    tags: ['aws', 'ec2', 'compute'],
-    metadata: { instanceCount: 5, region: 'us-west-2' }
-  }
-];
-
 export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [assets, setAssets] = useState<Asset[]>(mockAssets);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [uploads, setUploads] = useState<AssetUpload[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
 
-  const addAsset = (assetData: Omit<Asset, 'id' | 'lastUpdated'>) => {
-    const newAsset: Asset = {
-      ...assetData,
-      id: Date.now().toString(),
-      lastUpdated: new Date().toISOString().split('T')[0]
-    };
-    setAssets(prev => [...prev, newAsset]);
+  // Load assets on component mount
+  useEffect(() => {
+    refreshAssets();
+  }, []);
+
+  // Refresh assets when search query or type filter changes
+  useEffect(() => {
+    if (searchQuery || selectedType !== 'all') {
+      handleSearch();
+    } else {
+      refreshAssets();
+    }
+  }, [searchQuery, selectedType]);
+
+  const refreshAssets = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const fetchedAssets = await AssetService.getAssets();
+      setAssets(fetchedAssets);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load assets');
+      console.error('Error loading assets:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const updateAsset = (id: string, updates: Partial<Asset>) => {
-    setAssets(prev => 
-      prev.map(asset => 
-        asset.id === id 
-          ? { ...asset, ...updates, lastUpdated: new Date().toISOString().split('T')[0] }
-          : asset
-      )
-    );
+  const handleSearch = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const searchResults = await AssetService.searchAssets(searchQuery, selectedType);
+      setAssets(searchResults);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to search assets');
+      console.error('Error searching assets:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deleteAsset = (id: string) => {
-    setAssets(prev => prev.filter(asset => asset.id !== id));
+  const addAsset = async (assetData: Omit<Asset, 'id' | 'lastUpdated'>) => {
+    try {
+      setError(null);
+      const newAsset = await AssetService.createAsset(assetData);
+      setAssets(prev => [newAsset, ...prev]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create asset');
+      throw err;
+    }
+  };
+
+  const updateAsset = async (id: string, updates: Partial<Asset>) => {
+    try {
+      setError(null);
+      const updatedAsset = await AssetService.updateAsset(id, updates);
+      setAssets(prev => 
+        prev.map(asset => asset.id === id ? updatedAsset : asset)
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update asset');
+      throw err;
+    }
+  };
+
+  const deleteAsset = async (id: string) => {
+    try {
+      setError(null);
+      await AssetService.deleteAsset(id);
+      setAssets(prev => prev.filter(asset => asset.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete asset');
+      throw err;
+    }
   };
 
   const uploadAssets = async (file: File) => {
-    const upload: AssetUpload = {
-      file,
-      status: 'processing',
-      progress: 0
-    };
-    
-    setUploads(prev => [...prev, upload]);
-    
-    // Simulate file processing
-    for (let i = 0; i <= 100; i += 10) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      setUploads(prev => 
-        prev.map(u => u.file === file ? { ...u, progress: i } : u)
-      );
-    }
-    
-    // Simulate successful processing
-    const mockProcessedAssets = [
-      {
-        name: 'Legacy ERP System',
-        type: 'application' as const,
-        category: 'Enterprise Application',
-        description: 'Legacy ERP system for financial operations',
-        owner: 'Finance Team',
-        status: 'active' as const,
-        criticality: 'medium' as const,
-        createdBy: 'system',
-        tags: ['erp', 'legacy', 'finance'],
-        metadata: { vendor: 'SAP', version: '6.0' }
-      },
-      {
-        name: 'MongoDB Cluster',
-        type: 'database' as const,
-        category: 'NoSQL Database',
-        description: 'MongoDB cluster for analytics data',
-        owner: 'Analytics Team',
-        status: 'active' as const,
-        criticality: 'medium' as const,
-        createdBy: 'system',
-        tags: ['mongodb', 'nosql', 'analytics'],
-        metadata: { nodes: 3, version: '6.0' }
+    try {
+      setError(null);
+      
+      // Create upload record
+      const uploadId = await AssetUploadService.createUpload(file.name, file.size);
+      
+      const upload: AssetUpload = {
+        file,
+        status: 'processing',
+        progress: 0
+      };
+      
+      setUploads(prev => [...prev, upload]);
+      
+      // Simulate file processing with progress updates
+      for (let i = 0; i <= 100; i += 10) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+        await AssetUploadService.updateUploadProgress(uploadId, i, i === 100 ? 'completed' : 'processing');
+        setUploads(prev => 
+          prev.map(u => u.file === file ? { ...u, progress: i, status: i === 100 ? 'completed' : 'processing' } : u)
+        );
       }
-    ];
-    
-    mockProcessedAssets.forEach(asset => addAsset(asset));
-    
-    setUploads(prev => 
-      prev.map(u => u.file === file ? { 
-        ...u, 
-        status: 'completed', 
-        results: { 
-          total: 2, 
-          processed: 2, 
-          errors: [] 
-        } 
-      } : u)
-    );
+      
+      // Simulate processing results
+      const processedCount = 2;
+      const errorCount = 0;
+      
+      await AssetUploadService.updateUploadResults(uploadId, processedCount, processedCount, errorCount, []);
+      
+      setUploads(prev => 
+        prev.map(u => u.file === file ? { 
+          ...u, 
+          status: 'completed',
+          results: { 
+            total: processedCount, 
+            processed: processedCount, 
+            errors: [] 
+          } 
+        } : u)
+      );
+      
+      // Refresh assets to show newly uploaded ones
+      await refreshAssets();
+      
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload assets');
+      setUploads(prev => 
+        prev.map(u => u.file === file ? { ...u, status: 'failed' } : u)
+      );
+      throw err;
+    }
   };
 
   return (
     <AssetContext.Provider value={{
       assets,
+      loading,
+      error,
       addAsset,
       updateAsset,
       deleteAsset,
@@ -162,7 +172,8 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       searchQuery,
       setSearchQuery,
       selectedType,
-      setSelectedType
+      setSelectedType,
+      refreshAssets
     }}>
       {children}
     </AssetContext.Provider>

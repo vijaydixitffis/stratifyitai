@@ -11,12 +11,24 @@ import {
   Users,
   CheckCircle,
   AlertTriangle,
-  Clock
+  Clock,
+  Loader2
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { user, isClient, isAdmin } = useAuth();
-  const { assets } = useAssets();
+  const { assets, loading } = useAssets();
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Loading dashboard...</span>
+        </div>
+      </div>
+    );
+  }
 
   const assetStats = {
     total: assets.length,
@@ -166,13 +178,13 @@ const Dashboard: React.FC = () => {
           </button>
           <button className="p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-left">
             <BarChart3 className="h-8 w-8 text-green-600 mb-2" />
-            <h4 className="font-medium text-gray-900">Analytics</h4>
+            <h4 className="font-medium text-gray-900">Strategy Insights</h4>
             <p className="text-sm text-gray-600">View portfolio insights</p>
           </button>
           <button className="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-left">
             <Shield className="h-8 w-8 text-purple-600 mb-2" />
-            <h4 className="font-medium text-gray-900">Assessments</h4>
-            <p className="text-sm text-gray-600">Run security assessments</p>
+            <h4 className="font-medium text-gray-900">Portfolio Analysis</h4>
+            <p className="text-sm text-gray-600">Run portfolio assessments</p>
           </button>
           <button className="p-4 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors text-left">
             <Cloud className="h-8 w-8 text-indigo-600 mb-2" />

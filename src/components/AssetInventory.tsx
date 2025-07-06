@@ -14,13 +14,26 @@ import {
   Cloud,
   Settings,
   Globe,
-  Package
+  Package,
+  Loader2,
+  AlertCircle,
+  RefreshCw
 } from 'lucide-react';
 import AssetForm from './AssetForm';
 import AssetUpload from './AssetUpload';
 
 const AssetInventory: React.FC = () => {
-  const { assets, deleteAsset, searchQuery, setSearchQuery, selectedType, setSelectedType } = useAssets();
+  const { 
+    assets, 
+    loading, 
+    error, 
+    deleteAsset, 
+    searchQuery, 
+    setSearchQuery, 
+    selectedType, 
+    setSelectedType,
+    refreshAssets
+  } = useAssets();
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
@@ -69,14 +82,6 @@ const AssetInventory: React.FC = () => {
     return colors[criticality as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const filteredAssets = assets.filter(asset => {
-    const matchesSearch = asset.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         asset.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         asset.owner.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = selectedType === 'all' || asset.type === selectedType;
-    return matchesSearch && matchesType;
-  });
-
   const handleEdit = (asset: any) => {
     setEditingAsset(asset);
     setShowForm(true);
@@ -86,9 +91,13 @@ const AssetInventory: React.FC = () => {
     setViewingAsset(asset);
   };
 
-  const handleDelete = (assetId: string) => {
+  const handleDelete = async (assetId: string) => {
     if (window.confirm('Are you sure you want to delete this asset?')) {
-      deleteAsset(assetId);
+      try {
+        await deleteAsset(assetId);
+      } catch (err) {
+        console.error('Failed to delete asset:', err);
+      }
     }
   };
 
@@ -96,6 +105,21 @@ const AssetInventory: React.FC = () => {
     setShowForm(false);
     setEditingAsset(null);
   };
+
+  const handleRefresh = () => {
+    refreshAssets();
+  };
+
+  if (loading && assets.length === 0) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Loading assets...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -105,6 +129,22 @@ const AssetInventory: React.FC = () => {
           Manage your IT assets, upload inventories, and track portfolio status
         </p>
       </div>
+
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <span className="text-red-800">{error}</span>
+            <button
+              onClick={handleRefresh}
+              className="ml-auto text-red-600 hover:text-red-800 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Actions Bar */}
       <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-6">
@@ -123,6 +163,14 @@ const AssetInventory: React.FC = () => {
             >
               <Upload className="h-4 w-4 mr-2" />
               Upload Spreadsheet
+            </button>
+            <button
+              onClick={handleRefresh}
+              disabled={loading}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
           </div>
           
@@ -154,7 +202,7 @@ const AssetInventory: React.FC = () => {
 
       {/* Asset Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {filteredAssets.map((asset) => (
+        {assets.map((asset) => (
           <div key={asset.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start space-x-3">
@@ -217,7 +265,7 @@ const AssetInventory: React.FC = () => {
         ))}
       </div>
 
-      {filteredAssets.length === 0 && (
+      {assets.length === 0 && !loading && (
         <div className="text-center py-12">
           <Database className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">No assets found</h3>
