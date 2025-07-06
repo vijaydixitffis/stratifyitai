@@ -58,6 +58,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     if (isSupabaseConfigured() && supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
+          console.log('Auth state change:', event, session?.user?.id);
           if (session?.user) {
             await loadUserProfile(session.user.id);
           } else {
@@ -74,7 +75,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const loadUserProfile = async (userId: string) => {
+    // Prevent loading if user is already loaded with the same ID
+    if (user?.id === userId) {
+      console.log('User profile already loaded for:', userId);
+      return;
+    }
+
     try {
+      console.log('Loading user profile for:', userId);
       const { data: profile, error } = await supabase!
         .from('user_profiles')
         .select('*')
@@ -95,6 +103,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           organization: profile.organization
         };
         setUser(appUser);
+        console.log('User profile loaded successfully:', appUser.name);
       }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);

@@ -28,18 +28,22 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
 
-  // Load assets on component mount
+  // Load assets on component mount only
   useEffect(() => {
     refreshAssets();
   }, []);
 
-  // Refresh assets when search query or type filter changes
+  // Debounced search effect to prevent excessive API calls
   useEffect(() => {
-    if (searchQuery || selectedType !== 'all') {
-      handleSearch();
-    } else {
-      refreshAssets();
-    }
+    const timeoutId = setTimeout(() => {
+      if (searchQuery || selectedType !== 'all') {
+        handleSearch();
+      } else {
+        refreshAssets();
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timeoutId);
   }, [searchQuery, selectedType]);
 
   const refreshAssets = async () => {
