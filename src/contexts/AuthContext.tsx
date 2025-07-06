@@ -5,7 +5,6 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string, role?: string, organization?: string) => Promise<void>;
   logout: () => void;
   isClient: boolean;
   isAdmin: boolean;
@@ -150,38 +149,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const signup = async (
-    email: string, 
-    password: string, 
-    name: string, 
-    role: string = 'client-manager',
-    organization: string = 'Default Organization'
-  ) => {
-    if (!isSupabaseConfigured() || !supabase) {
-      throw new Error('Signup is only available when connected to Supabase');
-    }
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          name,
-          role,
-          organization
-        }
-      }
-    });
-
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    if (data.user) {
-      // Profile will be created automatically by the trigger
-      await loadUserProfile(data.user.id);
-    }
-  };
 
   const logout = async () => {
     if (isSupabaseConfigured() && supabase) {
@@ -194,7 +162,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const isAdmin = user?.role.startsWith('admin') || false;
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isClient, isAdmin, loading }}>
+    <AuthContext.Provider value={{ user, login, logout, isClient, isAdmin, loading }}>
       {children}
     </AuthContext.Provider>
   );

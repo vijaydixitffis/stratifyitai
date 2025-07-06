@@ -6,13 +6,9 @@ import { isSupabaseConfigured } from '../lib/supabase';
 const LoginForm: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('client-manager');
-  const [organization, setOrganization] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSignup, setIsSignup] = useState(false);
-  const { login, signup } = useAuth();
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,11 +16,7 @@ const LoginForm: React.FC = () => {
     setLoading(true);
 
     try {
-      if (isSignup) {
-        await signup(email, password, name, role, organization);
-      } else {
-        await login(email, password);
-      }
+      await login(email, password);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed');
     } finally {
@@ -39,14 +31,7 @@ const LoginForm: React.FC = () => {
     { email: 'lisa@stratifyit.ai', role: 'Admin Architect' }
   ];
 
-  const roleOptions = [
-    { value: 'client-manager', label: 'Client Manager' },
-    { value: 'client-architect', label: 'Client Architect' },
-    { value: 'client-cxo', label: 'Client CXO' },
-    { value: 'admin-consultant', label: 'Admin Consultant' },
-    { value: 'admin-architect', label: 'Admin Architect' },
-    { value: 'admin-super', label: 'Super Admin' }
-  ];
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
@@ -92,34 +77,6 @@ const LoginForm: React.FC = () => {
         )}
 
         <form className="mt-8 space-y-6 bg-white p-8 rounded-lg shadow-md" onSubmit={handleSubmit}>
-          <div className="flex items-center justify-center space-x-4 mb-6">
-            <button
-              type="button"
-              onClick={() => setIsSignup(false)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                !isSignup 
-                  ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              <User className="h-4 w-4" />
-              <span>Sign In</span>
-            </button>
-            {isSupabaseConfigured() && (
-              <button
-                type="button"
-                onClick={() => setIsSignup(true)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-md transition-colors ${
-                  isSignup 
-                    ? 'bg-blue-100 text-blue-700 border border-blue-300' 
-                    : 'text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                <UserPlus className="h-4 w-4" />
-                <span>Sign Up</span>
-              </button>
-            )}
-          </div>
 
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md p-4 flex items-center space-x-2">
@@ -129,57 +86,6 @@ const LoginForm: React.FC = () => {
           )}
 
           <div className="space-y-4">
-            {isSignup && (
-              <>
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                    Full Name
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter your full name"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="role" className="block text-sm font-medium text-gray-700">
-                    Role
-                  </label>
-                  <select
-                    id="role"
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    {roleOptions.map(option => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="organization" className="block text-sm font-medium text-gray-700">
-                    Organization
-                  </label>
-                  <input
-                    id="organization"
-                    type="text"
-                    value={organization}
-                    onChange={(e) => setOrganization(e.target.value)}
-                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter your organization name"
-                    required
-                  />
-                </div>
-              </>
-            )}
 
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700">
@@ -223,7 +129,7 @@ const LoginForm: React.FC = () => {
             disabled={loading}
             className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {loading ? (isSignup ? 'Creating Account...' : 'Signing in...') : (isSignup ? 'Create Account' : 'Sign in')}
+            {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
 
@@ -237,7 +143,6 @@ const LoginForm: React.FC = () => {
                   onClick={() => {
                     setEmail(user.email);
                     setPassword('demo123');
-                    setIsSignup(false);
                   }}
                   className="w-full text-left p-3 bg-gray-50 hover:bg-gray-100 rounded-md transition-colors"
                 >
@@ -256,15 +161,14 @@ const LoginForm: React.FC = () => {
           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-lg font-medium text-gray-900 mb-2">Database Connected</h3>
             <p className="text-sm text-gray-600 mb-4">
-              You can now sign up for a new account or sign in with existing credentials.
+              Sign in with your existing credentials. New users can only be created by Super Admins through the Client Management panel.
             </p>
             
-            {/* Admin Creation Instructions */}
+            {/* Admin Instructions */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h4 className="text-sm font-medium text-blue-900 mb-2">Creating Admin Users</h4>
+              <h4 className="text-sm font-medium text-blue-900 mb-2">User Management</h4>
               <p className="text-xs text-blue-800">
-                To create the first admin user, sign up with role "Super Admin" and organization "StratifyIT.ai".
-                Subsequent admin users can be managed through the admin panel.
+                Super Admins can create and manage users through the Client Management section in the admin panel.
               </p>
             </div>
           </div>
