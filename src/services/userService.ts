@@ -19,6 +19,7 @@ export interface UserProfile {
   orgCode?: string;
   org_id?: number;
   created_at: string;
+  updated_at: string;
   status: 'active' | 'inactive';
 }
 
@@ -36,6 +37,7 @@ export class UserService {
           orgCode: 'TECH1',
           org_id: 1,
           created_at: '2024-01-15T10:00:00Z',
+          updated_at: '2024-01-15T10:00:00Z',
           status: 'active'
         },
         {
@@ -47,6 +49,7 @@ export class UserService {
           orgCode: 'TECH1',
           org_id: 1,
           created_at: '2024-01-16T14:30:00Z',
+          updated_at: '2024-01-16T14:30:00Z',
           status: 'active'
         },
         {
@@ -58,6 +61,7 @@ export class UserService {
           orgCode: 'STRAT',
           org_id: 2,
           created_at: '2024-01-10T09:15:00Z',
+          updated_at: '2024-01-10T09:15:00Z',
           status: 'active'
         },
         {
@@ -69,26 +73,42 @@ export class UserService {
           orgCode: 'STRAT',
           org_id: 2,
           created_at: '2024-01-12T11:45:00Z',
+          updated_at: '2024-01-12T11:45:00Z',
           status: 'active'
         }
       ];
     }
 
     try {
+      // Join with organizations to get org_code
       const { data, error } = await supabase
         .from('user_profiles')
-        .select('*')
+        .select(`
+          *,
+          organizations!user_profiles_org_id_fkey (
+            org_code,
+            org_name
+          )
+        `)
         .order('created_at', { ascending: false });
 
       if (error) {
+        console.error('Error fetching users:', error);
         throw error;
       }
 
       // Map the database fields to our interface
       return (data || []).map(user => ({
-        ...user,
-        orgCode: user.org_code, // Map org_code to orgCode for consistency
-        org_id: user.org_id
+        id: user.id,
+        name: user.name,
+        email: user.email || '',
+        role: user.role,
+        organization: user.organization,
+        orgCode: user.organizations?.org_code,
+        org_id: user.org_id,
+        created_at: user.created_at,
+        updated_at: user.updated_at,
+        status: 'active' // Default to active since we don't have a status field yet
       }));
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -108,14 +128,16 @@ export class UserService {
         orgCode: userData.orgCode,
         org_id: userData.org_id,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         status: 'active'
       };
       return newUser;
     }
 
     try {
-      // Use signUp instead of admin.createUser for now
-      // In production, this should be handled by a serverless function
+      console.log('Creating user with data:', userData);
+      
+      // Create user with metadata that will be used by the trigger
       const { data, error } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
@@ -131,31 +153,65 @@ export class UserService {
       });
 
       if (error) {
+        console.error('Supabase auth error:', error);
         throw error;
       }
 
       if (!data.user) {
-        throw new Error('Failed to create user');
+        throw new Error('Failed to create user - no user returned');
       }
 
-      // The profile should be created automatically by the trigger
-      // Return a mock profile for now
-      const newUser: UserProfile = {
-        id: data.user.id,
-        name: userData.name,
-        email: userData.email,
-        role: userData.role,
-        organization: userData.organization,
-        orgCode: userData.orgCode,
-        org_id: userData.org_id,
-        created_at: new Date().toISOString(),
+      console.log('User created successfully:', data.user.id);
+
+      // Wait a moment for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Fetch the created profile to return
+      const { data: profile, error: profileError } = await supabase
+        .from('user_profiles')
+        .select(`
+          *,
+          organizations!user_profiles_org_id_fkey (
+            org_code,
+            org_name
+          )
+        `)
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching created profile:', profileError);
+        // Return a constructed profile if we can't fetch it
+        return {
+          id: data.user.id,
+          name: userData.name,
+          email: userData.email,
+          role: userData.role,
+          organization: userData.organization,
+          orgCode: userData.orgCode,
+          org_id: userData.org_id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          status: 'active'
+        };
+      }
+
+      return {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email || userData.email,
+        role: profile.role,
+        organization: profile.organization,
+        orgCode: profile.organizations?.org_code,
+        org_id: profile.org_id,
+        created_at: profile.created_at,
+        updated_at: profile.updated_at,
         status: 'active'
       };
 
-      return newUser;
     } catch (error) {
       console.error('Error creating user:', error);
-      throw new Error('Failed to create user. Admin user creation requires proper server-side setup.');
+      throw new Error(`Failed to create user: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -169,7 +225,9 @@ export class UserService {
         role: updates.role || 'client-manager',
         organization: updates.organization || '',
         orgCode: updates.orgCode,
+        org_id: updates.org_id,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         status: updates.status || 'active'
       };
       return updatedUser;
@@ -182,28 +240,52 @@ export class UserService {
       if (updates.name !== undefined) updateData.name = updates.name;
       if (updates.role !== undefined) updateData.role = updates.role;
       if (updates.organization !== undefined) updateData.organization = updates.organization;
-      if (updates.status !== undefined) updateData.status = updates.status;
       if (updates.org_id !== undefined) updateData.org_id = updates.org_id;
+      if (updates.email !== undefined) updateData.email = updates.email;
 
-      // Only proceed with main update if there are fields to update
+      // Only proceed with update if there are fields to update
       if (Object.keys(updateData).length > 0) {
         const { data, error } = await supabase
           .from('user_profiles')
           .update(updateData)
           .eq('id', userId)
-          .select()
+          .select(`
+            *,
+            organizations!user_profiles_org_id_fkey (
+              org_code,
+              org_name
+            )
+          `)
           .single();
 
         if (error) {
+          console.error('Error updating user:', error);
           throw error;
         }
 
-        return data;
+        return {
+          id: data.id,
+          name: data.name,
+          email: data.email || '',
+          role: data.role,
+          organization: data.organization,
+          orgCode: data.organizations?.org_code,
+          org_id: data.org_id,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          status: 'active'
+        };
       } else {
         // If no main fields to update, just return the current user data
         const { data, error } = await supabase
           .from('user_profiles')
-          .select()
+          .select(`
+            *,
+            organizations!user_profiles_org_id_fkey (
+              org_code,
+              org_name
+            )
+          `)
           .eq('id', userId)
           .single();
 
@@ -211,7 +293,18 @@ export class UserService {
           throw error;
         }
 
-        return data;
+        return {
+          id: data.id,
+          name: data.name,
+          email: data.email || '',
+          role: data.role,
+          organization: data.organization,
+          orgCode: data.organizations?.org_code,
+          org_id: data.org_id,
+          created_at: data.created_at,
+          updated_at: data.updated_at,
+          status: 'active'
+        };
       }
     } catch (error) {
       console.error('Error updating user:', error);
@@ -226,18 +319,23 @@ export class UserService {
     }
 
     try {
-      // For now, just mark as inactive since Admin API requires service role
+      // Delete the user profile (this will also handle auth user deletion via cascade if set up)
       const { error } = await supabase
         .from('user_profiles')
-        .update({ status: 'inactive' })
+        .delete()
         .eq('id', userId);
 
       if (error) {
+        console.error('Error deleting user profile:', error);
         throw error;
       }
+
+      // Note: In production, you might want to use the Admin API to delete the auth user as well
+      // This requires service role key and should be done in a serverless function
+      
     } catch (error) {
       console.error('Error deleting user:', error);
-      throw new Error('Failed to delete user. Admin user deletion requires proper server-side setup.');
+      throw new Error('Failed to delete user');
     }
   }
-} 
+}

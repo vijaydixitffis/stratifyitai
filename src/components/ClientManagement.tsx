@@ -16,7 +16,8 @@ import {
   XCircle,
   Plus,
   Settings,
-  X
+  X,
+  Loader2
 } from 'lucide-react';
 import { UserService, UserProfile } from '../services/userService';
 import { OrganizationService, Organization } from '../services/organizationService';
@@ -38,6 +39,7 @@ const ClientManagement: React.FC = () => {
   const [showOnboardOrgForm, setShowOnboardOrgForm] = useState(false);
   const [selectedOrgForUsers, setSelectedOrgForUsers] = useState<Organization | null>(null);
   const [viewMode, setViewMode] = useState<'organizations' | 'users'>('organizations');
+  const [submitting, setSubmitting] = useState(false);
 
   // Form state for creating/editing clients
   const [formData, setFormData] = useState({
@@ -82,14 +84,23 @@ const ClientManagement: React.FC = () => {
 
   useEffect(() => {
     if (isSuperAdmin) {
-      loadClients();
-      loadOrganizations();
+      loadData();
     }
   }, [isSuperAdmin]);
 
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([loadClients(), loadOrganizations()]);
+    } catch (err) {
+      console.error('Error loading data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadClients = async () => {
     try {
-      setLoading(true);
       setError(null);
       
       const users = await UserService.getUsers();
@@ -97,8 +108,6 @@ const ClientManagement: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load clients');
       console.error('Error loading clients:', err);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -116,6 +125,7 @@ const ClientManagement: React.FC = () => {
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
 
     try {
       setError(null);
@@ -134,11 +144,14 @@ const ClientManagement: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create client');
       console.error('Error creating client:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
     
     if (!editingClient) return;
 
@@ -159,6 +172,8 @@ const ClientManagement: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update client');
       console.error('Error updating client:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -209,14 +224,14 @@ const ClientManagement: React.FC = () => {
     return matchesSearch && matchesRole && matchesOrg;
   });
 
-  // This line is no longer needed since we're using organizationsList from the database
-
   const handleOnboardOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
 
     // Validate org code length
     if (orgFormData.orgCode.length !== 5) {
       setError('Organization code must be exactly 5 characters');
+      setSubmitting(false);
       return;
     }
 
@@ -250,16 +265,21 @@ const ClientManagement: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to onboard organization');
       console.error('Error onboarding organization:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const handleEditOrganization = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    
     if (!editingOrg) return;
 
     // Validate org code length
     if (editingOrg.code.length !== 5) {
       setError('Organization code must be exactly 5 characters');
+      setSubmitting(false);
       return;
     }
 
@@ -287,6 +307,8 @@ const ClientManagement: React.FC = () => {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update organization');
       console.error('Error updating organization:', err);
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -338,6 +360,17 @@ const ClientManagement: React.FC = () => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-64">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-blue-600 mb-4" />
+          <p className="text-gray-600">Loading client management...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -349,14 +382,16 @@ const ClientManagement: React.FC = () => {
         <div className="flex space-x-3">
           <button
             onClick={() => setShowOnboardOrgForm(true)}
-            className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+            disabled={submitting}
+            className="flex items-center space-x-2 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
-            <span>Onboard an Organization</span>
+            <span>Onboard Organization</span>
           </button>
           <button
             onClick={() => setShowCreateForm(true)}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+            disabled={submitting}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
             <UserPlus className="h-4 w-4" />
             <span>Add New Client</span>
@@ -431,22 +466,14 @@ const ClientManagement: React.FC = () => {
         <div className="bg-red-50 border border-red-200 rounded-md p-4 flex items-center space-x-2">
           <AlertCircle className="h-5 w-5 text-red-400" />
           <span className="text-sm text-red-800">{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-400 hover:text-red-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
       )}
-
-      {/* User Management Info */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-        <div className="flex items-start space-x-3">
-          <Shield className="h-5 w-5 text-blue-500 mt-0.5" />
-          <div>
-            <h3 className="text-sm font-medium text-blue-800">User Management Active</h3>
-            <p className="text-sm text-blue-700 mt-1">
-              You can create, edit, and manage users. New users will receive an email confirmation to activate their accounts. 
-              For enhanced security in production, consider setting up serverless functions for Admin API operations.
-            </p>
-          </div>
-        </div>
-      </div>
 
       {/* Create/Edit Form Modal */}
       {(showCreateForm || editingClient) && (
@@ -465,6 +492,7 @@ const ClientManagement: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   required
+                  disabled={submitting}
                 />
               </div>
               
@@ -476,7 +504,7 @@ const ClientManagement: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   required
-                  disabled={!!editingClient}
+                  disabled={!!editingClient || submitting}
                 />
               </div>
               
@@ -486,6 +514,7 @@ const ClientManagement: React.FC = () => {
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  disabled={submitting}
                 >
                   {roleOptions.map(role => (
                     <option key={role.value} value={role.value}>{role.label}</option>
@@ -501,6 +530,7 @@ const ClientManagement: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   required
+                  disabled={submitting}
                 />
               </div>
               
@@ -514,6 +544,7 @@ const ClientManagement: React.FC = () => {
                     className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                     required
                     minLength={6}
+                    disabled={submitting}
                   />
                 </div>
               )}
@@ -521,9 +552,14 @@ const ClientManagement: React.FC = () => {
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={submitting}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center"
                 >
-                  {editingClient ? 'Update Client' : 'Create Client'}
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    editingClient ? 'Update Client' : 'Create Client'
+                  )}
                 </button>
                 <button
                   type="button"
@@ -532,7 +568,8 @@ const ClientManagement: React.FC = () => {
                     setEditingClient(null);
                     resetForm();
                   }}
-                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+                  disabled={submitting}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -545,7 +582,7 @@ const ClientManagement: React.FC = () => {
       {/* Onboard Organization Modal */}
       {showOnboardOrgForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
             <h2 className="text-xl font-bold mb-4">Onboard an Organization</h2>
             
             <form onSubmit={handleOnboardOrganization} className="space-y-4">
@@ -558,6 +595,7 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter organization name"
                   required
+                  disabled={submitting}
                 />
               </div>
               
@@ -575,6 +613,7 @@ const ClientManagement: React.FC = () => {
                   required
                   maxLength={5}
                   minLength={5}
+                  disabled={submitting}
                 />
                 {orgFormData.orgCode.length > 0 && orgFormData.orgCode.length < 5 && (
                   <p className="text-sm text-red-600 mt-1">Org code must be exactly 5 characters</p>
@@ -589,6 +628,7 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter organization description"
                   rows={3}
+                  disabled={submitting}
                 />
               </div>
               
@@ -600,6 +640,7 @@ const ClientManagement: React.FC = () => {
                   onChange={(e) => setOrgFormData({ ...orgFormData, sector: e.target.value })}
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter sector (e.g., Technology, Finance)"
+                  disabled={submitting}
                 />
               </div>
               
@@ -611,6 +652,7 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter any additional remarks"
                   rows={2}
+                  disabled={submitting}
                 />
               </div>
               
@@ -623,6 +665,7 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter Client CXO full name"
                   required
+                  disabled={submitting}
                 />
               </div>
               
@@ -635,6 +678,7 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter Client CXO email"
                   required
+                  disabled={submitting}
                 />
               </div>
               
@@ -648,15 +692,21 @@ const ClientManagement: React.FC = () => {
                   placeholder="Enter Client CXO password"
                   required
                   minLength={6}
+                  disabled={submitting}
                 />
               </div>
               
               <div className="flex space-x-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors"
+                  disabled={submitting}
+                  className="flex-1 bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center"
                 >
-                  Onboard Organization
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Onboard Organization'
+                  )}
                 </button>
                 <button
                   type="button"
@@ -664,7 +714,8 @@ const ClientManagement: React.FC = () => {
                     setShowOnboardOrgForm(false);
                     resetOrgForm();
                   }}
-                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+                  disabled={submitting}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -678,12 +729,7 @@ const ClientManagement: React.FC = () => {
       {viewMode === 'organizations' ? (
         /* Organizations List */
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading organizations...</p>
-            </div>
-          ) : organizationsList.length === 0 ? (
+          {organizationsList.length === 0 ? (
             <div className="p-8 text-center">
               <Building className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No organizations found</h3>
@@ -753,19 +799,21 @@ const ClientManagement: React.FC = () => {
                           <span className="text-sm text-gray-900">{activeUsers.length}</span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {firstUser ? new Date(firstUser.created_at).toLocaleDateString() : 'N/A'}
+                          {firstUser ? new Date(firstUser.created_at).toLocaleDateString() : new Date(org.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end space-x-2">
                             <button
                               onClick={() => openEditOrganization(org)}
                               className="text-gray-600 hover:text-gray-900 transition-colors"
+                              disabled={submitting}
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleManageUsers(org)}
                               className="flex items-center space-x-2 text-blue-600 hover:text-blue-900 transition-colors"
+                              disabled={submitting}
                             >
                               <Settings className="h-4 w-4" />
                               <span>Manage Users</span>
@@ -783,12 +831,7 @@ const ClientManagement: React.FC = () => {
       ) : (
         /* Users List for Selected Organization */
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-2 text-gray-600">Loading users...</p>
-            </div>
-          ) : (() => {
+          {(() => {
             const orgUsers = getUsersForOrganization(selectedOrgForUsers!);
             const filteredOrgUsers = orgUsers.filter(client => {
               const matchesSearch = client.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -872,12 +915,14 @@ const ClientManagement: React.FC = () => {
                             <button
                               onClick={() => openEditForm(client)}
                               className="text-blue-600 hover:text-blue-900 transition-colors"
+                              disabled={submitting}
                             >
                               <Edit className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleDeleteClient(client.id)}
                               className="text-red-600 hover:text-red-900 transition-colors"
+                              disabled={submitting}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -902,6 +947,7 @@ const ClientManagement: React.FC = () => {
               <button
                 onClick={() => setEditingOrg(null)}
                 className="text-gray-400 hover:text-gray-600"
+                disabled={submitting}
               >
                 <X className="h-6 w-6" />
               </button>
@@ -917,6 +963,7 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter organization name"
                   required
+                  disabled={submitting}
                 />
               </div>
               
@@ -934,36 +981,30 @@ const ClientManagement: React.FC = () => {
                   required
                   maxLength={5}
                   minLength={5}
+                  disabled={submitting}
                 />
                 {editingOrg.code.length > 0 && editingOrg.code.length < 5 && (
                   <p className="text-sm text-red-600 mt-1">Org code must be exactly 5 characters</p>
                 )}
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Client CXO Name</label>
-                <input
-                  type="text"
-                  value={editingOrg.cxoName}
-                  onChange={(e) => setEditingOrg({ ...editingOrg, cxoName: e.target.value })}
-                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Enter Client CXO name"
-                  required
-                />
-              </div>
-              
               <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setEditingOrg(null)}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors"
+                  disabled={submitting}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 transition-colors disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={submitting}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center"
                 >
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
                   Update Organization
                 </button>
               </div>
@@ -975,4 +1016,4 @@ const ClientManagement: React.FC = () => {
   );
 };
 
-export default ClientManagement; 
+export default ClientManagement;

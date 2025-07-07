@@ -66,15 +66,18 @@ export class OrganizationService {
     }
 
     try {
+      console.log('Fetching organizations from Supabase...');
       const { data, error } = await supabase
         .from('organizations')
         .select('*')
         .order('created_at', { ascending: false });
 
       if (error) {
+        console.error('Error fetching organizations:', error);
         throw error;
       }
 
+      console.log('Successfully fetched organizations:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('Error fetching organizations:', error);
@@ -104,26 +107,33 @@ export class OrganizationService {
     }
 
     try {
+      console.log('Creating organization:', orgData);
+      
       const { data, error } = await supabase
         .from('organizations')
         .insert({
-          org_code: orgData.org_code,
+          org_code: orgData.org_code.toUpperCase(), // Ensure uppercase
           org_name: orgData.org_name,
-          description: orgData.description,
-          sector: orgData.sector,
-          remarks: orgData.remarks
+          description: orgData.description || `Organization for ${orgData.org_name}`,
+          sector: orgData.sector || 'Technology',
+          remarks: orgData.remarks || 'Newly created organization'
         })
         .select()
         .single();
 
       if (error) {
+        console.error('Error creating organization:', error);
+        if (error.code === '23505') { // Unique constraint violation
+          throw new Error(`Organization code '${orgData.org_code}' already exists`);
+        }
         throw error;
       }
 
+      console.log('Organization created successfully:', data);
       return data;
     } catch (error) {
       console.error('Error creating organization:', error);
-      throw new Error('Failed to create organization');
+      throw new Error(`Failed to create organization: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -149,21 +159,36 @@ export class OrganizationService {
     }
 
     try {
+      console.log('Updating organization:', orgId, updates);
+      
+      // Prepare update data
+      const updateData: any = {};
+      if (updates.org_code) updateData.org_code = updates.org_code.toUpperCase();
+      if (updates.org_name) updateData.org_name = updates.org_name;
+      if (updates.description !== undefined) updateData.description = updates.description;
+      if (updates.sector !== undefined) updateData.sector = updates.sector;
+      if (updates.remarks !== undefined) updateData.remarks = updates.remarks;
+
       const { data, error } = await supabase
         .from('organizations')
-        .update(updates)
+        .update(updateData)
         .eq('org_id', orgId)
         .select()
         .single();
 
       if (error) {
+        console.error('Error updating organization:', error);
+        if (error.code === '23505') { // Unique constraint violation
+          throw new Error(`Organization code '${updates.org_code}' already exists`);
+        }
         throw error;
       }
 
+      console.log('Organization updated successfully:', data);
       return data;
     } catch (error) {
       console.error('Error updating organization:', error);
-      throw new Error('Failed to update organization');
+      throw new Error(`Failed to update organization: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -174,17 +199,38 @@ export class OrganizationService {
     }
 
     try {
+      console.log('Deleting organization:', orgId);
+      
+      // Check if organization has users
+      const { data: users, error: usersError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('org_id', orgId)
+        .limit(1);
+
+      if (usersError) {
+        console.error('Error checking organization users:', usersError);
+        throw usersError;
+      }
+
+      if (users && users.length > 0) {
+        throw new Error('Cannot delete organization that has users. Please reassign or delete users first.');
+      }
+
       const { error } = await supabase
         .from('organizations')
         .delete()
         .eq('org_id', orgId);
 
       if (error) {
+        console.error('Error deleting organization:', error);
         throw error;
       }
+
+      console.log('Organization deleted successfully');
     } catch (error) {
       console.error('Error deleting organization:', error);
-      throw new Error('Failed to delete organization');
+      throw new Error(`Failed to delete organization: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -192,20 +238,23 @@ export class OrganizationService {
     if (!isSupabaseConfigured() || !supabase) {
       // Mock lookup for demo mode
       const orgs = await this.getOrganizations();
-      return orgs.find(org => org.org_code === orgCode) || null;
+      return orgs.find(org => org.org_code === orgCode.toUpperCase()) || null;
     }
 
     try {
+      console.log('Fetching organization by code:', orgCode);
+      
       const { data, error } = await supabase
         .from('organizations')
         .select('*')
-        .eq('org_code', orgCode)
+        .eq('org_code', orgCode.toUpperCase())
         .single();
 
       if (error) {
         if (error.code === 'PGRST116') {
           return null; // No rows returned
         }
+        console.error('Error fetching organization by code:', error);
         throw error;
       }
 
@@ -215,4 +264,4 @@ export class OrganizationService {
       throw new Error('Failed to fetch organization');
     }
   }
-} 
+}
