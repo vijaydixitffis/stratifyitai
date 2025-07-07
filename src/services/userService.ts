@@ -82,10 +82,10 @@ export class UserService {
     try {
       // Join with organizations to get org_code
       const { data, error } = await supabase
-        .from('user_profiles')
+        .from('client_users')
         .select(`
           *,
-          organizations!user_profiles_org_id_fkey (
+          client_orgs!client_users_org_id_fkey (
             org_code,
             org_name
           )
@@ -104,7 +104,7 @@ export class UserService {
         email: user.email || '',
         role: user.role,
         organization: user.organization,
-        orgCode: user.organizations?.org_code,
+        orgCode: user.client_orgs?.org_code,
         org_id: user.org_id,
         created_at: user.created_at,
         updated_at: user.updated_at,
@@ -147,7 +147,7 @@ export class UserService {
             role: userData.role,
             organization: userData.organization,
             orgCode: userData.orgCode,
-            org_id: userData.org_id
+            org_id: userData.org_id ? Number(userData.org_id) : null
           }
         }
       });
@@ -168,10 +168,10 @@ export class UserService {
 
       // Fetch the created profile to return
       const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
+        .from('client_users')
         .select(`
           *,
-          organizations!user_profiles_org_id_fkey (
+          client_orgs!client_users_org_id_fkey (
             org_code,
             org_name
           )
@@ -202,7 +202,7 @@ export class UserService {
         email: profile.email || userData.email,
         role: profile.role,
         organization: profile.organization,
-        orgCode: profile.organizations?.org_code,
+        orgCode: profile.client_orgs?.org_code,
         org_id: profile.org_id,
         created_at: profile.created_at,
         updated_at: profile.updated_at,
@@ -246,12 +246,12 @@ export class UserService {
       // Only proceed with update if there are fields to update
       if (Object.keys(updateData).length > 0) {
         const { data, error } = await supabase
-          .from('user_profiles')
+          .from('client_users')
           .update(updateData)
           .eq('id', userId)
           .select(`
             *,
-            organizations!user_profiles_org_id_fkey (
+            client_orgs!client_users_org_id_fkey (
               org_code,
               org_name
             )
@@ -269,7 +269,7 @@ export class UserService {
           email: data.email || '',
           role: data.role,
           organization: data.organization,
-          orgCode: data.organizations?.org_code,
+          orgCode: data.client_orgs?.org_code,
           org_id: data.org_id,
           created_at: data.created_at,
           updated_at: data.updated_at,
@@ -278,10 +278,10 @@ export class UserService {
       } else {
         // If no main fields to update, just return the current user data
         const { data, error } = await supabase
-          .from('user_profiles')
+          .from('client_users')
           .select(`
             *,
-            organizations!user_profiles_org_id_fkey (
+            client_orgs!client_users_org_id_fkey (
               org_code,
               org_name
             )
@@ -299,7 +299,7 @@ export class UserService {
           email: data.email || '',
           role: data.role,
           organization: data.organization,
-          orgCode: data.organizations?.org_code,
+          orgCode: data.client_orgs?.org_code,
           org_id: data.org_id,
           created_at: data.created_at,
           updated_at: data.updated_at,
@@ -321,7 +321,7 @@ export class UserService {
     try {
       // Delete the user profile (this will also handle auth user deletion via cascade if set up)
       const { error } = await supabase
-        .from('user_profiles')
+        .from('client_users')
         .delete()
         .eq('id', userId);
 
@@ -338,4 +338,45 @@ export class UserService {
       throw new Error('Failed to delete user');
     }
   }
+}
+
+export async function createClientUser({ email, password, name, role, org_id }: {
+  email: string;
+  password: string;
+  name: string;
+  role: string;
+  org_id: number;
+}): Promise<any> {
+  if (!supabase) throw new Error('Supabase client not initialized');
+  // 1. Create user in Supabase Auth, passing metadata
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        name,
+        role,
+        org_id,
+      }
+    }
+  });
+  if (signUpError) throw signUpError;
+  const user = signUpData?.user;
+  if (!user) throw new Error('User not returned from signUp');
+  // 2. Poll for client_users row to be created by trigger
+  let profile = null;
+  for (let i = 0; i < 5; i++) {
+    const { data, error } = await supabase
+      .from('client_users')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    if (data) {
+      profile = data;
+      break;
+    }
+    await new Promise(res => setTimeout(res, 500));
+  }
+  if (!profile) throw new Error('User profile not created in time');
+  return profile;
 }

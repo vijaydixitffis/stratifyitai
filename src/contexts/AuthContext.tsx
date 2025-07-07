@@ -4,7 +4,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (orgCode: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isClient: boolean;
   isAdmin: boolean;
@@ -20,28 +20,32 @@ const mockUsers: User[] = [
     name: 'John Smith',
     email: 'john@company.com',
     role: 'client-manager',
-    organization: 'TechCorp Inc.'
+    organization: 'TechCorp Inc.',
+    orgCode: 'TECH1'
   },
   {
     id: '2',
     name: 'Sarah Johnson',
     email: 'sarah@company.com',
     role: 'client-architect',
-    organization: 'TechCorp Inc.'
+    organization: 'TechCorp Inc.',
+    orgCode: 'TECH1'
   },
   {
     id: '3',
     name: 'Mike Chen',
     email: 'mike@stratifyit.ai',
     role: 'admin-consultant',
-    organization: 'StratifyIT.ai'
+    organization: 'StratifyIT.ai',
+    orgCode: 'STRAT'
   },
   {
     id: '4',
     name: 'Lisa Rodriguez',
     email: 'lisa@stratifyit.ai',
     role: 'admin-architect',
-    organization: 'StratifyIT.ai'
+    organization: 'StratifyIT.ai',
+    orgCode: 'STRAT'
   }
 ];
 
@@ -73,7 +77,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const loadUserProfile = async (userId: string) => {
+  const loadUserProfile = async (userId: string, orgCode?: string) => {
     // Prevent loading if user is already loaded with the same ID
     if (user?.id === userId) {
       console.log('User profile already loaded for:', userId);
@@ -82,24 +86,49 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       console.log('Loading user profile for:', userId);
-      const { data: profile, error } = await supabase!
-        .from('user_profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error loading user profile:', error);
+      let profile = null;
+      if (orgCode && orgCode.toUpperCase() === 'ADMIN') {
+        // Fetch from admin_users (NO join)
+        const { data, error } = await supabase!
+          .from('admin_users')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        if (error) throw error;
+        profile = data;
+        if (profile) {
+          const appUser: User = {
+            id: profile.id,
+            name: profile.name,
+            email: profile.email || '',
+            role: profile.role,
+            organization: 'Admin',
+            orgCode: 'ADMIN',
+            org_id: profile.org_id
+          };
+          setUser(appUser);
+          console.log('User profile loaded successfully:', appUser.name);
+        }
         return;
+      } else {
+        // Fetch from client_users and join client_orgs
+        const { data, error } = await supabase!
+          .from('client_users')
+          .select('*, client_orgs(org_code, org_name)')
+          .eq('id', userId)
+          .single();
+        if (error) throw error;
+        profile = data;
       }
-
       if (profile) {
         const appUser: User = {
           id: profile.id,
           name: profile.name,
-          email: '', // We'll get this from auth.users if needed
+          email: profile.email || '',
           role: profile.role,
-          organization: profile.organization
+          organization: profile.client_orgs?.org_name || profile.organization,
+          orgCode: profile.client_orgs?.org_code || profile.orgCode,
+          org_id: profile.org_id
         };
         setUser(appUser);
         console.log('User profile loaded successfully:', appUser.name);
@@ -123,24 +152,58 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setLoading(false);
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (orgCode: string, email: string, password: string) => {
     if (isSupabaseConfigured() && supabase) {
-      // Use Supabase authentication
+      let org = null;
+      if (orgCode.toUpperCase() !== 'ADMIN') {
+        // Validate org code from client_orgs
+        const { data: orgData, error: orgError } = await supabase
+          .from('client_orgs')
+          .select('*')
+          .eq('org_code', orgCode.toUpperCase())
+          .single();
+        if (orgError || !orgData) {
+          throw new Error('Invalid organization code');
+        }
+        org = orgData;
+      }
+      // Authenticate with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
-
       if (error) {
         throw new Error(error.message);
       }
-
       if (data.user) {
-        await loadUserProfile(data.user.id);
+        if (orgCode.toUpperCase() === 'ADMIN') {
+          // Fetch from admin_users
+          const { data: adminUser, error: adminError } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+          if (adminError || !adminUser) {
+            throw new Error('Admin user not found');
+          }
+          await loadUserProfile(data.user.id, 'ADMIN');
+        } else {
+          // Fetch from client_users with org_id
+          const { data: clientUser, error: clientError } = await supabase
+            .from('client_users')
+            .select('*')
+            .eq('id', data.user.id)
+            .eq('org_id', org.org_id)
+            .single();
+          if (clientError || !clientUser) {
+            throw new Error('Client user not found for this organization');
+          }
+          await loadUserProfile(data.user.id);
+        }
       }
     } else {
       // Mock authentication for demo
-      const foundUser = mockUsers.find(u => u.email === email);
+      const foundUser = mockUsers.find(u => u.email === email && u.orgCode === orgCode.toUpperCase());
       if (foundUser && password === 'demo123') {
         setUser(foundUser);
       } else {
@@ -148,8 +211,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
     }
   };
-
-
 
   const logout = async () => {
     if (isSupabaseConfigured() && supabase) {

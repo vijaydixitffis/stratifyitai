@@ -68,7 +68,7 @@ export class OrganizationService {
     try {
       console.log('Fetching organizations from Supabase...');
       const { data, error } = await supabase
-        .from('organizations')
+        .from('client_orgs')
         .select('*')
         .order('created_at', { ascending: false });
 
@@ -110,7 +110,7 @@ export class OrganizationService {
       console.log('Creating organization:', orgData);
       
       const { data, error } = await supabase
-        .from('organizations')
+        .from('client_orgs')
         .insert({
           org_code: orgData.org_code.toUpperCase(), // Ensure uppercase
           org_name: orgData.org_name,
@@ -170,7 +170,7 @@ export class OrganizationService {
       if (updates.remarks !== undefined) updateData.remarks = updates.remarks;
 
       const { data, error } = await supabase
-        .from('organizations')
+        .from('client_orgs')
         .update(updateData)
         .eq('org_id', orgId)
         .select()
@@ -218,7 +218,7 @@ export class OrganizationService {
       }
 
       const { error } = await supabase
-        .from('organizations')
+        .from('client_orgs')
         .delete()
         .eq('org_id', orgId);
 
@@ -245,7 +245,7 @@ export class OrganizationService {
       console.log('Fetching organization by code:', orgCode);
       
       const { data, error } = await supabase
-        .from('organizations')
+        .from('client_orgs')
         .select('*')
         .eq('org_code', orgCode.toUpperCase())
         .single();

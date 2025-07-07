@@ -4,6 +4,8 @@ export interface User {
   email: string;
   role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
   organization: string;
+  orgCode?: string;
+  org_id?: number;
 }
 
 export interface Asset {
@@ -19,6 +21,7 @@ export interface Asset {
   createdBy: string;
   tags: string[];
   metadata: Record<string, any>;
+  org_id?: number;
 }
 
 export interface AssetUpload {

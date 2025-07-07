@@ -98,7 +98,7 @@ export class AssetService {
   }
 
   // Fetch all assets
-  static async getAssets(): Promise<Asset[]> {
+  static async getAssets(org_id?: number): Promise<Asset[]> {
     if (!this.isSupabaseAvailable()) {
       // Return mock data when Supabase is not configured
       console.log('Using mock data - Supabase not configured');
@@ -107,10 +107,14 @@ export class AssetService {
 
     try {
       console.log('Fetching assets from Supabase...');
-      const { data, error } = await supabase!
-        .from('assets')
+      let query = supabase!
+        .from('it_assets')
         .select('*')
         .order('created_at', { ascending: false });
+      if (org_id) {
+        query = query.eq('org_id', org_id);
+      }
+      const { data, error } = await query;
 
       if (error) {
         console.error('Supabase error fetching assets:', error);
@@ -126,13 +130,14 @@ export class AssetService {
   }
 
   // Create a new asset
-  static async createAsset(asset: Omit<Asset, 'id' | 'lastUpdated'>): Promise<Asset> {
+  static async createAsset(asset: Omit<Asset, 'id' | 'lastUpdated'>, org_id?: number): Promise<Asset> {
     if (!this.isSupabaseAvailable()) {
       // Mock implementation
       const newAsset: Asset = {
         ...asset,
         id: Date.now().toString(),
-        lastUpdated: new Date().toISOString().split('T')[0]
+        lastUpdated: new Date().toISOString().split('T')[0],
+        org_id
       };
       mockAssetStore.unshift(newAsset);
       return Promise.resolve(newAsset);
@@ -140,8 +145,8 @@ export class AssetService {
 
     try {
       const { data, error } = await supabase!
-        .from('assets')
-        .insert([this.transformAssetToDB(asset)])
+        .from('it_assets')
+        .insert([{ ...this.transformAssetToDB(asset), org_id }])
         .select()
         .single();
 
@@ -158,7 +163,7 @@ export class AssetService {
   }
 
   // Update an existing asset
-  static async updateAsset(id: string, updates: Partial<Asset>): Promise<Asset> {
+  static async updateAsset(id: string, updates: Partial<Asset>, org_id?: number): Promise<Asset> {
     if (!this.isSupabaseAvailable()) {
       // Mock implementation
       const index = mockAssetStore.findIndex(a => a.id === id);
@@ -168,7 +173,8 @@ export class AssetService {
       const updatedAsset = {
         ...mockAssetStore[index],
         ...updates,
-        lastUpdated: new Date().toISOString().split('T')[0]
+        lastUpdated: new Date().toISOString().split('T')[0],
+        org_id: org_id ?? mockAssetStore[index].org_id
       };
       mockAssetStore[index] = updatedAsset;
       return Promise.resolve(updatedAsset);
@@ -176,8 +182,8 @@ export class AssetService {
 
     try {
       const { data, error } = await supabase!
-        .from('assets')
-        .update(this.transformAssetToDB(updates))
+        .from('it_assets')
+        .update({ ...this.transformAssetToDB(updates), org_id })
         .eq('id', id)
         .select()
         .single();
@@ -204,7 +210,7 @@ export class AssetService {
 
     try {
       const { error } = await supabase!
-        .from('assets')
+        .from('it_assets')
         .delete()
         .eq('id', id);
 
@@ -219,7 +225,7 @@ export class AssetService {
   }
 
   // Search assets
-  static async searchAssets(query: string, type?: string): Promise<Asset[]> {
+  static async searchAssets(query: string, type?: string, org_id?: number): Promise<Asset[]> {
     if (!this.isSupabaseAvailable()) {
       // Mock implementation
       let filtered = [...mockAssetStore];
@@ -236,13 +242,16 @@ export class AssetService {
       if (type && type !== 'all') {
         filtered = filtered.filter(asset => asset.type === type);
       }
+      if (org_id) {
+        filtered = filtered.filter(asset => asset.org_id === org_id);
+      }
       
       return Promise.resolve(filtered);
     }
 
     try {
       let queryBuilder = supabase!
-        .from('assets')
+        .from('it_assets')
         .select('*');
 
       if (query) {
@@ -251,6 +260,9 @@ export class AssetService {
 
       if (type && type !== 'all') {
         queryBuilder = queryBuilder.eq('type', type);
+      }
+      if (org_id) {
+        queryBuilder = queryBuilder.eq('org_id', org_id);
       }
 
       const { data, error } = await queryBuilder
@@ -312,7 +324,7 @@ export class AssetService {
 
 export class AssetUploadService {
   // Create upload record
-  static async createUpload(fileName: string, fileSize: number): Promise<string> {
+  static async createUpload(fileName: string, fileSize: number, org_id?: number): Promise<string> {
     if (!isSupabaseConfigured() || !supabase) {
       // Mock implementation
       return Promise.resolve(Date.now().toString());
@@ -322,11 +334,12 @@ export class AssetUploadService {
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data, error } = await supabase
-        .from('asset_uploads')
+        .from('it_asset_uploads')
         .insert([{
           file_name: fileName,
           file_size: fileSize,
-          uploaded_by: user?.id
+          uploaded_by: user?.id,
+          org_id
         }])
         .select()
         .single();
@@ -365,7 +378,7 @@ export class AssetUploadService {
       }
 
       const { error } = await supabase
-        .from('asset_uploads')
+        .from('it_asset_uploads')
         .update(updates)
         .eq('id', uploadId);
 
@@ -394,7 +407,7 @@ export class AssetUploadService {
 
     try {
       const { error } = await supabase
-        .from('asset_uploads')
+        .from('it_asset_uploads')
         .update({
           total_rows: totalRows,
           processed_rows: processedRows,
@@ -426,7 +439,7 @@ export class AssetUploadService {
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data, error } = await supabase
-        .from('asset_uploads')
+        .from('it_asset_uploads')
         .select('*')
         .eq('uploaded_by', user?.id)
         .order('created_at', { ascending: false });

@@ -19,8 +19,10 @@ import {
   X,
   Loader2
 } from 'lucide-react';
-import { UserService, UserProfile } from '../services/userService';
+import { UserService, UserProfile, createClientUser } from '../services/userService';
 import { OrganizationService, Organization } from '../services/organizationService';
+import { AssetService } from '../services/assetService';
+import { useSelectedOrg } from '../contexts/SelectedOrgContext';
 
 // Use the UserProfile interface from the service
 type ClientUser = UserProfile;
@@ -40,6 +42,7 @@ const ClientManagement: React.FC = () => {
   const [selectedOrgForUsers, setSelectedOrgForUsers] = useState<Organization | null>(null);
   const [viewMode, setViewMode] = useState<'organizations' | 'users'>('organizations');
   const [submitting, setSubmitting] = useState(false);
+  const { selectedOrg } = useSelectedOrg();
 
   // Form state for creating/editing clients
   const [formData, setFormData] = useState({
@@ -82,6 +85,9 @@ const ClientManagement: React.FC = () => {
   // Check if current user is Super Admin
   const isSuperAdmin = user?.role === 'admin-super';
 
+  // Only allow access if logged-in user is ADMIN org admin
+  const canAccessClientManagement = user?.orgCode === 'ADMIN' && user?.role?.startsWith('admin-');
+
   useEffect(() => {
     if (isSuperAdmin) {
       loadData();
@@ -123,29 +129,17 @@ const ClientManagement: React.FC = () => {
     }
   };
 
-  const handleCreateClient = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-
+  const handleCreateClient = async (formData: any) => {
     try {
-      setError(null);
-      
-      const newUser = await UserService.createUser({
-        email: formData.email,
-        password: formData.password,
-        name: formData.name,
-        role: formData.role,
-        organization: formData.organization
+      if (!selectedOrg) throw new Error('No organization selected');
+      const profile = await createClientUser({
+        ...formData,
+        org_id: selectedOrg.org_id,
       });
-
-      setClients(prev => [newUser, ...prev]);
-      setShowCreateForm(false);
-      resetForm();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create client');
-      console.error('Error creating client:', err);
-    } finally {
-      setSubmitting(false);
+      alert('Client user created successfully!');
+      // Optionally refresh client list here
+    } catch (err: any) {
+      alert('Failed to create client user: ' + (err.message || err));
     }
   };
 
@@ -198,7 +192,7 @@ const ClientManagement: React.FC = () => {
       name: '',
       email: '',
       role: 'client-manager',
-      organization: '',
+      organization: selectedOrgForUsers ? selectedOrgForUsers.org_name : '',
       password: ''
     });
   };
@@ -348,13 +342,13 @@ const ClientManagement: React.FC = () => {
     return clients.filter(client => client.org_id === organization.org_id);
   };
 
-  if (!isSuperAdmin) {
+  if (!canAccessClientManagement) {
     return (
       <div className="flex items-center justify-center min-h-64">
         <div className="text-center">
           <Shield className="mx-auto h-12 w-12 text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 mb-2">Access Restricted</h3>
-          <p className="text-gray-600">Only Super Admins can access Client Management.</p>
+          <p className="text-gray-600">Only StratifyIT.AI Admins can access Client Management.</p>
         </div>
       </div>
     );
@@ -388,29 +382,41 @@ const ClientManagement: React.FC = () => {
             <Plus className="h-4 w-4" />
             <span>Onboard Organization</span>
           </button>
-          <button
-            onClick={() => setShowCreateForm(true)}
-            disabled={submitting}
-            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            <UserPlus className="h-4 w-4" />
-            <span>Add New Client</span>
-          </button>
         </div>
       </div>
 
       {/* View Toggle */}
       {viewMode === 'users' && selectedOrgForUsers && (
         <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={handleBackToOrganizations}
+              className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              <span>← Back to Organizations</span>
+            </button>
+            <h2 className="text-xl font-semibold text-gray-900">
+              Users in {selectedOrgForUsers?.org_name}
+            </h2>
+          </div>
           <button
-            onClick={handleBackToOrganizations}
-            className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors"
+            onClick={() => {
+              setShowCreateForm(true);
+              // Initialize form with selected organization
+              setFormData({
+                name: '',
+                email: '',
+                role: 'client-manager',
+                organization: selectedOrgForUsers ? selectedOrgForUsers.org_name : '',
+                password: ''
+              });
+            }}
+            disabled={submitting}
+            className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
           >
-            <span>← Back to Organizations</span>
+            <UserPlus className="h-4 w-4" />
+            <span>Add New User</span>
           </button>
-          <h2 className="text-xl font-semibold text-gray-900">
-            Users in {selectedOrgForUsers?.org_name}
-          </h2>
         </div>
       )}
 
@@ -480,8 +486,20 @@ const ClientManagement: React.FC = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
             <h2 className="text-xl font-bold mb-4">
-              {editingClient ? 'Edit Client' : 'Add New Client'}
+              {editingClient ? 'Edit Client' : 'Add New User'}
             </h2>
+            
+            {/* Show selected organization when creating new user */}
+            {showCreateForm && selectedOrgForUsers && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center space-x-2">
+                  <Building className="h-4 w-4 text-blue-600" />
+                  <span className="text-sm font-medium text-blue-900">
+                    Organization: {selectedOrgForUsers.org_name} ({selectedOrgForUsers.org_code})
+                  </span>
+                </div>
+              </div>
+            )}
             
             <form onSubmit={editingClient ? handleUpdateClient : handleCreateClient} className="space-y-4">
               <div>
@@ -516,21 +534,33 @@ const ClientManagement: React.FC = () => {
                   className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                   disabled={submitting}
                 >
-                  {roleOptions.map(role => (
+                  {(
+                    selectedOrgForUsers?.org_code === 'ADMIN'
+                      ? roleOptions.filter(r => r.value.startsWith('admin-'))
+                      : roleOptions.filter(r => r.value.startsWith('client-'))
+                  ).map(role => (
                     <option key={role.value} value={role.value}>{role.label}</option>
                   ))}
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Organization</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Organization
+                  {showCreateForm && (
+                    <span className="text-xs text-gray-500 ml-1">(pre-filled)</span>
+                  )}
+                </label>
                 <input
                   type="text"
-                  value={formData.organization}
+                  value={showCreateForm && selectedOrgForUsers ? selectedOrgForUsers.org_name : formData.organization}
                   onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
-                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  className={`w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 ${
+                    showCreateForm ? 'bg-gray-50 text-gray-600' : ''
+                  }`}
                   required
-                  disabled={submitting}
+                  disabled={showCreateForm || submitting}
+                  readOnly={showCreateForm}
                 />
               </div>
               

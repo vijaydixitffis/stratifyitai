@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Asset, AssetUpload } from '../types';
 import { AssetService, AssetUploadService } from '../services/assetService';
+import { useAuth } from './AuthContext';
+import { useSelectedOrg } from './SelectedOrgContext';
 
 interface AssetContextType {
   assets: Asset[];
@@ -27,11 +29,14 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [uploads, setUploads] = useState<AssetUpload[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState('all');
+  const { user } = useAuth();
+  const { selectedOrg } = useSelectedOrg();
 
-  // Load assets on component mount only
+  // Load assets on component mount and when org changes
   useEffect(() => {
     refreshAssets();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.org_id, selectedOrg?.org_id]);
 
   // Debounced search effect to prevent excessive API calls
   useEffect(() => {
@@ -46,11 +51,25 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     return () => clearTimeout(timeoutId);
   }, [searchQuery, selectedType]);
 
+  // Clear search and filters when org changes
+  useEffect(() => {
+    setSearchQuery('');
+    setSelectedType('all');
+  }, [user?.org_id, selectedOrg?.org_id]);
+
+  // Helper to get effective org_id
+  const getOrgId = () => {
+    if (user?.role?.startsWith('admin') && user.orgCode === 'ADMIN' && selectedOrg) {
+      return selectedOrg.org_id;
+    }
+    return user?.org_id;
+  };
+
   const refreshAssets = async () => {
     try {
       setLoading(true);
       setError(null);
-      const fetchedAssets = await AssetService.getAssets();
+      const fetchedAssets = await AssetService.getAssets(getOrgId());
       setAssets(fetchedAssets);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load assets');
@@ -64,7 +83,7 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     try {
       setLoading(true);
       setError(null);
-      const searchResults = await AssetService.searchAssets(searchQuery, selectedType);
+      const searchResults = await AssetService.searchAssets(searchQuery, selectedType, getOrgId());
       setAssets(searchResults);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to search assets');
@@ -77,7 +96,7 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const addAsset = async (assetData: Omit<Asset, 'id' | 'lastUpdated'>) => {
     try {
       setError(null);
-      const newAsset = await AssetService.createAsset(assetData);
+      const newAsset = await AssetService.createAsset(assetData, getOrgId());
       setAssets(prev => [newAsset, ...prev]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create asset');
@@ -88,7 +107,7 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const updateAsset = async (id: string, updates: Partial<Asset>) => {
     try {
       setError(null);
-      const updatedAsset = await AssetService.updateAsset(id, updates);
+      const updatedAsset = await AssetService.updateAsset(id, updates, getOrgId());
       setAssets(prev => 
         prev.map(asset => asset.id === id ? updatedAsset : asset)
       );
@@ -114,7 +133,7 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setError(null);
       
       // Create upload record
-      const uploadId = await AssetUploadService.createUpload(file.name, file.size);
+      const uploadId = await AssetUploadService.createUpload(file.name, file.size, getOrgId());
       
       const upload: AssetUpload = {
         file,

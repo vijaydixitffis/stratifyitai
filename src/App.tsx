@@ -9,6 +9,7 @@ import AssetInventory from './components/AssetInventory';
 import AssessmentsDashboard from './components/AssessmentsDashboard';
 import ClientManagement from './components/ClientManagement';
 import { Loader2 } from 'lucide-react';
+import { SelectedOrgProvider } from './contexts/SelectedOrgContext';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -88,11 +89,13 @@ const AppContent: React.FC = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <AssetProvider>
-        <AppContent />
-      </AssetProvider>
-    </AuthProvider>
+    <SelectedOrgProvider>
+      <AuthProvider>
+        <AssetProvider>
+          <AppContent />
+        </AssetProvider>
+      </AuthProvider>
+    </SelectedOrgProvider>
   );
 }
 

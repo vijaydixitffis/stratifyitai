@@ -5,7 +5,8 @@ A comprehensive platform for analyzing and strategizing IT portfolios, built wit
 ## Features
 
 - **Asset Inventory Management**: Track and manage IT assets across different categories
-- **User Authentication**: Secure login and user management with role-based access
+- **Organization-Based Authentication**: Secure login with organization code, email, and password validation
+- **User Management**: Role-based access control with organization isolation
 - **Dashboard Analytics**: Visual insights into your IT portfolio
 - **File Upload**: Bulk import assets via CSV/Excel files
 - **Real-time Updates**: Live data synchronization with Supabase
@@ -51,6 +52,21 @@ supabase db push
 # Or manually run the SQL files in the supabase/migrations/ directory
 ```
 
+**Important**: After running migrations, execute the organization access fix in your Supabase SQL editor:
+
+```sql
+-- Add anonymous access policy for organization validation during login
+CREATE POLICY "Allow anonymous access to organizations for login"
+  ON organizations
+  FOR SELECT
+  TO anon
+  USING (true);
+```
+
+This policy is required for the organization code validation to work during the login process.
+
+**Note**: If you encounter issues with user-organization associations when creating new organizations, run the organization ID fix script (`fix_org_id_association.sql`) in your Supabase SQL editor to resolve any existing broken links.
+
 ### 5. Start Development Server
 ```bash
 npm run dev
@@ -62,10 +78,36 @@ The application will be available at `http://localhost:5173`
 
 If you don't have Supabase configured, the application will run in demo mode with mock data. Use these demo credentials:
 
-- **Email**: `john@company.com` | **Password**: `demo123`
-- **Email**: `sarah@company.com` | **Password**: `demo123`
-- **Email**: `mike@stratifyit.ai` | **Password**: `demo123`
-- **Email**: `lisa@stratifyit.ai` | **Password**: `demo123`
+### Demo Accounts
+
+| Organization Code | Email | Password | Role |
+|------------------|-------|----------|------|
+| `TECH1` | `john@company.com` | `demo123` | Client Manager |
+| `TECH1` | `sarah@company.com` | `demo123` | Client Architect |
+| `STRAT` | `mike@stratifyit.ai` | `demo123` | Admin Consultant |
+| `STRAT` | `lisa@stratifyit.ai` | `demo123` | Admin Architect |
+
+**Note**: Organization codes are exactly 5 characters and are case-insensitive (automatically converted to uppercase).
+
+## Authentication Flow
+
+The application uses a three-factor authentication system:
+
+1. **Organization Code**: 5-character unique identifier for each organization
+2. **Email**: User's email address
+3. **Password**: User's password
+
+### Authentication Process
+
+1. User enters organization code, email, and password
+2. System validates the organization code exists
+3. System authenticates email and password with Supabase Auth
+4. System verifies the user belongs to the specified organization
+5. User is logged in and redirected to the dashboard
+
+### Organization Isolation
+
+Users can only access data and features within their organization. This ensures proper data segregation between different client organizations.
 
 ## Project Structure
 
@@ -92,6 +134,7 @@ src/
 1. **Supabase Connection Errors**: Ensure your environment variables are correctly set
 2. **Database Policy Errors**: The RLS policies have been simplified to avoid infinite recursion
 3. **Import Errors**: Run `npm install` to ensure all dependencies are installed
+4. **Organization Association Issues**: If new users are not properly linked to organizations, run the `fix_org_id_association.sql` script in your Supabase SQL editor
 
 ### Recent Fixes
 
