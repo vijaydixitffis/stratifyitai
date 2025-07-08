@@ -85,7 +85,7 @@ export class UserService {
         .from('client_users')
         .select(`
           *,
-          client_orgs!client_users_org_id_fkey (
+          client_orgs (
             org_code,
             org_name
           )
@@ -171,7 +171,7 @@ export class UserService {
         .from('client_users')
         .select(`
           *,
-          client_orgs!client_users_org_id_fkey (
+          client_orgs (
             org_code,
             org_name
           )
@@ -251,7 +251,7 @@ export class UserService {
           .eq('id', userId)
           .select(`
             *,
-            client_orgs!client_users_org_id_fkey (
+            client_orgs (
               org_code,
               org_name
             )
@@ -281,7 +281,7 @@ export class UserService {
           .from('client_users')
           .select(`
             *,
-            client_orgs!client_users_org_id_fkey (
+            client_orgs (
               org_code,
               org_name
             )

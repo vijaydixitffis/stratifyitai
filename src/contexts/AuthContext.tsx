@@ -86,40 +86,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       console.log('Loading user profile for:', userId);
-      let profile = null;
-      if (orgCode && orgCode.toUpperCase() === 'ADMIN') {
-        // Fetch from admin_users (NO join)
-        const { data, error } = await supabase!
-          .from('admin_users')
-          .select('*')
-          .eq('id', userId)
-          .single();
-        if (error) throw error;
-        profile = data;
-        if (profile) {
-          const appUser: User = {
-            id: profile.id,
-            name: profile.name,
-            email: profile.email || '',
-            role: profile.role,
-            organization: 'Admin',
-            orgCode: 'ADMIN',
-            org_id: profile.org_id
-          };
-          setUser(appUser);
-          console.log('User profile loaded successfully:', appUser.name);
-        }
-        return;
-      } else {
-        // Fetch from client_users and join client_orgs
-        const { data, error } = await supabase!
-          .from('client_users')
-          .select('*, client_orgs(org_code, org_name)')
-          .eq('id', userId)
-          .single();
-        if (error) throw error;
-        profile = data;
-      }
+      // Fetch from client_users and join client_orgs
+      const { data: profile, error } = await supabase!
+        .from('client_users')
+        .select('*, client_orgs(org_code, org_name)')
+        .eq('id', userId)
+        .single();
+      if (error) throw error;
+      
       if (profile) {
         const appUser: User = {
           id: profile.id,
@@ -154,19 +128,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (orgCode: string, email: string, password: string) => {
     if (isSupabaseConfigured() && supabase) {
-      let org = null;
-      if (orgCode.toUpperCase() !== 'ADMIN') {
-        // Validate org code from client_orgs
-        const { data: orgData, error: orgError } = await supabase
-          .from('client_orgs')
-          .select('*')
-          .eq('org_code', orgCode.toUpperCase())
-          .single();
-        if (orgError || !orgData) {
-          throw new Error('Invalid organization code');
-        }
-        org = orgData;
+      // Validate org code from client_orgs
+      const { data: orgData, error: orgError } = await supabase
+        .from('client_orgs')
+        .select('*')
+        .eq('org_code', orgCode.toUpperCase())
+        .single();
+      if (orgError || !orgData) {
+        throw new Error('Invalid organization code');
       }
+      
       // Authenticate with Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -175,31 +146,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       if (error) {
         throw new Error(error.message);
       }
+      
       if (data.user) {
-        if (orgCode.toUpperCase() === 'ADMIN') {
-          // Fetch from admin_users
-          const { data: adminUser, error: adminError } = await supabase
-            .from('admin_users')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-          if (adminError || !adminUser) {
-            throw new Error('Admin user not found');
-          }
-          await loadUserProfile(data.user.id, 'ADMIN');
-        } else {
-          // Fetch from client_users with org_id
-          const { data: clientUser, error: clientError } = await supabase
-            .from('client_users')
-            .select('*')
-            .eq('id', data.user.id)
-            .eq('org_id', org.org_id)
-            .single();
-          if (clientError || !clientUser) {
-            throw new Error('Client user not found for this organization');
-          }
-          await loadUserProfile(data.user.id);
+        // Fetch from client_users with org_id
+        const { data: clientUser, error: clientError } = await supabase
+          .from('client_users')
+          .select('*')
+          .eq('id', data.user.id)
+          .eq('org_id', orgData.org_id)
+          .single();
+        if (clientError || !clientUser) {
+          throw new Error('User not found for this organization');
         }
+        await loadUserProfile(data.user.id);
       }
     } else {
       // Mock authentication for demo
