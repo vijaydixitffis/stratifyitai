@@ -15,13 +15,16 @@ const Header: React.FC<HeaderProps> = ({ onShowOnboardOrg, orgs, reloadOrgs }) =
   const { user, logout, isAdmin } = useAuth();
   const { selectedOrg, setSelectedOrg } = useSelectedOrg();
 
-  // Set default selected org to user's org on login
+  // Sort organizations alphabetically by name
+  const sortedOrgs = [...orgs].sort((a, b) => a.org_name.localeCompare(b.org_name));
+
+  // Don't auto-select any org - let admin choose
   useEffect(() => {
-    if (user && isAdmin && user.orgCode === 'ADMIN' && orgs.length > 0 && !selectedOrg) {
-      const defaultOrg = orgs.find(o => o.org_id === user.org_id) || orgs[0];
-      setSelectedOrg(defaultOrg);
+    // Reset selected org when user changes or logs out
+    if (!user) {
+      setSelectedOrg(null);
     }
-  }, [user, isAdmin, orgs, selectedOrg, setSelectedOrg]);
+  }, [user, setSelectedOrg]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
@@ -38,14 +41,19 @@ const Header: React.FC<HeaderProps> = ({ onShowOnboardOrg, orgs, reloadOrgs }) =
               {isAdmin && user.orgCode === 'ADMIN' && (
                 <>
                   <select
-                    className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                     value={selectedOrg?.org_id || ''}
                     onChange={e => {
-                      const org = orgs.find(o => o.org_id === Number(e.target.value));
-                      if (org) setSelectedOrg(org);
+                      if (e.target.value === '') {
+                        setSelectedOrg(null);
+                      } else {
+                        const org = sortedOrgs.find(o => o.org_id === Number(e.target.value));
+                        if (org) setSelectedOrg(org);
+                      }
                     }}
                   >
-                    {orgs.map(org => (
+                    <option value="">-- Select Organization --</option>
+                    {sortedOrgs.map(org => (
                       <option key={org.org_id} value={org.org_id}>
                         {org.org_name} ({org.org_code})
                       </option>
