@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useAssets } from '../contexts/AssetContext';
+import { useSelectedOrg } from '../contexts/SelectedOrgContext';
 import { 
   BarChart3, 
   Database, 
@@ -12,12 +13,17 @@ import {
   CheckCircle,
   AlertTriangle,
   Clock,
-  Loader2
+  Loader2,
+  Building,
+  ArrowRight,
+  Target,
+  Zap
 } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   const { user, isClient, isAdmin } = useAuth();
   const { assets, loading } = useAssets();
+  const { selectedOrg } = useSelectedOrg();
 
   if (loading) {
     return (
@@ -25,6 +31,121 @@ const Dashboard: React.FC = () => {
         <div className="flex items-center justify-center py-12">
           <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
           <span className="ml-2 text-gray-600">Loading dashboard...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show organization selection prompt for admins without selected org
+  if (isAdmin && user?.orgCode === 'ADMIN' && !selectedOrg) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="text-center py-16">
+          <div className="max-w-2xl mx-auto">
+            <div className="mb-8">
+              <Building className="mx-auto h-16 w-16 text-blue-600 mb-4" />
+              <h1 className="text-3xl font-bold text-gray-900 mb-4">
+                Welcome to StratifyIT.ai Admin Dashboard
+              </h1>
+              <p className="text-xl text-gray-600 mb-8">
+                Select an organization from the dropdown above to start managing their IT portfolio
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-8 mb-8">
+              <h2 className="text-xl font-semibold text-blue-900 mb-4">Getting Started</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    1
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-blue-900 mb-1">Select Organization</h3>
+                    <p className="text-sm text-blue-700">
+                      Choose a client organization from the dropdown in the header to view their portfolio
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-green-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    2
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-green-900 mb-1">Manage Assets</h3>
+                    <p className="text-sm text-green-700">
+                      View, add, and manage IT assets for the selected organization
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-purple-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    3
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-purple-900 mb-1">Run Assessments</h3>
+                    <p className="text-sm text-purple-700">
+                      Conduct portfolio analysis and generate strategic insights
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-8 h-8 bg-orange-600 text-white rounded-full flex items-center justify-center text-sm font-bold">
+                    4
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-orange-900 mb-1">Manage Users</h3>
+                    <p className="text-sm text-orange-700">
+                      Add and manage client users through the Client Management section
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="text-center">
+                  <Target className="mx-auto h-8 w-8 text-blue-600 mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-2">Portfolio Analysis</h3>
+                  <p className="text-sm text-gray-600">
+                    Comprehensive IT portfolio assessment and strategic planning
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="text-center">
+                  <Zap className="mx-auto h-8 w-8 text-green-600 mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-2">Digital Transformation</h3>
+                  <p className="text-sm text-gray-600">
+                    Guide organizations through their digital transformation journey
+                  </p>
+                </div>
+              </div>
+              
+              <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+                <div className="text-center">
+                  <Shield className="mx-auto h-8 w-8 text-purple-600 mb-3" />
+                  <h3 className="font-semibold text-gray-900 mb-2">Risk Management</h3>
+                  <p className="text-sm text-gray-600">
+                    Identify and mitigate IT risks across the organization
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-8 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+              <div className="flex items-center justify-center space-x-2 text-amber-800">
+                <ArrowRight className="h-5 w-5" />
+                <span className="font-medium">
+                  Use the organization dropdown above to get started
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -78,11 +199,32 @@ const Dashboard: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
+        {selectedOrg && isAdmin && user?.orgCode === 'ADMIN' && (
+          <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center space-x-3">
+              <Building className="h-5 w-5 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium text-blue-900">
+                  Managing: <span className="font-bold">{selectedOrg.org_name}</span>
+                </p>
+                <p className="text-xs text-blue-700">
+                  Organization Code: {selectedOrg.org_code}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         <h1 className="text-3xl font-bold text-gray-900">
-          Welcome back, {user?.name}
+          {isAdmin && user?.orgCode === 'ADMIN' 
+            ? `${selectedOrg?.org_name} Portfolio Dashboard`
+            : `Welcome back, ${user?.name}`
+          }
         </h1>
         <p className="mt-2 text-gray-600">
-          Here's your IT portfolio overview for {user?.organization}
+          {isAdmin && user?.orgCode === 'ADMIN'
+            ? `IT portfolio overview and insights for ${selectedOrg?.org_name}`
+            : `Here's your IT portfolio overview for ${user?.organization}`
+          }
         </p>
       </div>
 

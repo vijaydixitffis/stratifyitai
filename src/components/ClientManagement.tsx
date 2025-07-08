@@ -403,10 +403,40 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
           filteredClients.length === 0 ? (
             <div className="p-8 text-center">
               <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No users found for this organization</h3>
-              <p className="text-gray-600">Add a new user to get started.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                No users found for {selectedOrg.org_name}
+              </h3>
+              <p className="text-gray-600 mb-4">
+                This organization doesn't have any users yet. Add a new user to get started.
+              </p>
+              <button
+                onClick={() => setShowCreateForm(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+              >
+                <UserPlus className="h-4 w-4 mr-2" />
+                Add First User
+              </button>
             </div>
           ) : (
+            <>
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Building className="h-5 w-5 text-gray-600" />
+                    <div>
+                      <h3 className="text-lg font-medium text-gray-900">
+                        {selectedOrg.org_name} Users
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {filteredClients.length} user{filteredClients.length !== 1 ? 's' : ''} • {selectedOrg.org_code}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {selectedOrg.sector && `${selectedOrg.sector} Sector`}
+                  </div>
+                </div>
+              </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
@@ -492,12 +522,18 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
                 </tbody>
               </table>
             </div>
+            </>
           )
         ) : (
           <div className="p-8 text-center">
             <Building className="mx-auto h-12 w-12 text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No organization selected</h3>
-            <p className="text-gray-600">Please select an organization from the dropdown.</p>
+            <p className="text-gray-600 mb-4">
+              Please select an organization from the dropdown in the header to manage its users.
+            </p>
+            <div className="text-sm text-gray-500 bg-gray-50 p-3 rounded-lg">
+              💡 <strong>Tip:</strong> Use the dropdown in the top-right corner to select an organization
+            </div>
           </div>
         )}
       </div>
