@@ -140,10 +140,21 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       if (!selectedOrg) throw new Error('No organization selected');
       
       console.log('Creating client user for organization:', selectedOrg);
-      console.log('Form data:', formData);
+      console.log('Form data:', {
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        password: formData.password,
+        org_id: selectedOrg.org_id,
+        organization: selectedOrg.org_name,
+        orgCode: selectedOrg.org_code
+      });
       
       const profile = await createClientUser({
-        ...formData,
+        name: formData.name,
+        email: formData.email,
+        role: formData.role,
+        password: formData.password,
         org_id: selectedOrg.org_id,
       });
       
@@ -156,15 +167,12 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       setShowCreateForm(false);
       resetForm();
       
-      // Show success message
-      setError(null);
-      alert('Client user created successfully!');
+      console.log('Client user created and form closed successfully');
       
     } catch (err: any) {
       console.error('Error creating client user:', err);
       const errorMessage = err.message || err.toString();
       setError(`Failed to create client user: ${errorMessage}`);
-      alert(`Failed to create client user: ${errorMessage}`);
     } finally {
       setSubmitting(false);
     }
@@ -219,7 +227,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       name: '',
       email: '',
       role: 'client-manager',
-      organization: selectedOrg ? selectedOrg.org_name : '',
+      organization: '',
       password: ''
     });
   };
@@ -387,6 +395,11 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
           <h1 className="text-2xl font-bold text-gray-900 ml-4">Client Management</h1>
         </div>
         {/* Add New Client Button on the right */}
+        {!selectedOrg && (
+          <div className="text-sm text-amber-600 bg-amber-50 px-3 py-2 rounded-md border border-amber-200">
+            Select an organization to manage users
+          </div>
+        )}
         <button
           onClick={() => setShowCreateForm(true)}
           disabled={submitting || !selectedOrg}
@@ -398,6 +411,21 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       </div>
 
       {/* User List for Selected Organization */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5 text-red-500" />
+            <span className="text-red-800">{error}</span>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto text-red-600 hover:text-red-800 transition-colors"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         {selectedOrg ? (
           filteredClients.length === 0 ? (
@@ -537,6 +565,117 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
           </div>
         )}
       </div>
+      {showCreateForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-bold mb-4">
+              Add New User to {selectedOrg?.org_name}
+            </h2>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateClient(formData);
+            }} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter full name"
+                  required
+                  disabled={submitting}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter email address"
+                  required
+                  disabled={submitting}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={submitting}
+                >
+                  {roleOptions.filter(role => role.value.startsWith('client')).map(role => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {roleOptions.find(r => r.value === formData.role)?.description}
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className="w-full border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter password"
+                  required
+                  minLength={6}
+                  disabled={submitting}
+                />
+              </div>
+              
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <h4 className="text-sm font-medium text-gray-700 mb-1">Organization Details</h4>
+                <p className="text-sm text-gray-600">
+                  <strong>Name:</strong> {selectedOrg?.org_name}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Code:</strong> {selectedOrg?.org_code}
+                </p>
+              </div>
+              
+              <div className="flex space-x-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center"
+                >
+                  {submitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    'Create User'
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCreateForm(false);
+                    setEditingClient(null);
+                    resetForm();
+                    setError(null);
+                  }}
+                  disabled={submitting}
+                  className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Onboard Organization Modal */}
       {showOnboardOrgForm && (

@@ -29,13 +29,27 @@ const AppContent: React.FC = () => {
   const [showOnboardOrgForm, setShowOnboardOrgForm] = useState(false);
   const [orgOnboarded, setOrgOnboarded] = useState<null | { org: any, user: any }>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(false);
 
   // Load orgs on mount and when needed
   const reloadOrgs = async () => {
+    setOrgsLoading(true);
+    try {
     const orgList = await OrganizationService.getOrganizations();
     setOrgs(orgList);
+    } catch (error) {
+      console.error('Error loading organizations:', error);
+    } finally {
+      setOrgsLoading(false);
+    }
   };
-  useEffect(() => { reloadOrgs(); }, []);
+  
+  // Load organizations immediately when user logs in (especially for admins)
+  useEffect(() => { 
+    if (user) {
+      reloadOrgs(); 
+    }
+  }, [user]);
 
   if (loading) {
     return (

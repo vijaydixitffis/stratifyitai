@@ -18,13 +18,15 @@ const Header: React.FC<HeaderProps> = ({ onShowOnboardOrg, orgs, reloadOrgs }) =
   // Sort organizations alphabetically by name
   const sortedOrgs = [...orgs].sort((a, b) => a.org_name.localeCompare(b.org_name));
 
-  // Don't auto-select any org - let admin choose
+  // Reset selected org when user changes or logs out
   useEffect(() => {
-    // Reset selected org when user changes or logs out
     if (!user) {
       setSelectedOrg(null);
+    } else if (user && isAdmin && user.orgCode === 'ADMIN' && selectedOrg && !orgs.find(o => o.org_id === selectedOrg.org_id)) {
+      // Reset selected org if it's no longer in the list
+      setSelectedOrg(null);
     }
-  }, [user, setSelectedOrg]);
+  }, [user, setSelectedOrg, orgs, selectedOrg, isAdmin]);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
