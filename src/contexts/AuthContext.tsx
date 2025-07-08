@@ -79,12 +79,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const loadUserProfile = async (userId: string) => {
-    // Prevent loading if user is already loaded with the same ID
-    if (user?.id === userId) {
-      console.log('User profile already loaded for:', userId);
-      return;
-    }
-
     try {
       console.log('Loading user profile for:', userId);
       
@@ -93,9 +87,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .from('admin_users')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (adminProfile && !adminError) {
+      if (adminProfile) {
         // User is an admin
         const appUser: User = {
           id: adminProfile.id,
@@ -115,9 +109,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
-      if (clientProfile && !clientError) {
+      if (clientProfile) {
         // User is a client
         const appUser: User = {
           id: clientProfile.id,
@@ -135,11 +129,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // If user not found in either table
       console.error('User profile not found in admin_users or client_users tables');
-      throw new Error('User profile not found');
+      // Don't throw error immediately, user might be newly created
+      console.log('User profile not found, this might be a newly created user');
 
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      throw error;
+      // Don't throw error, just log it
+      console.log('Will retry loading user profile...');
     }
   };
 

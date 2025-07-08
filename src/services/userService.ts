@@ -137,8 +137,21 @@ export class UserService {
     try {
       console.log('Creating user with data:', userData);
       
-      // Create user with metadata that will be used by the trigger
-      const { data, error } = await supabase.auth.signUp({
+      // First check if organization exists for client users
+      if (userData.role.startsWith('client') && userData.org_id) {
+        const { data: orgData, error: orgError } = await supabase
+          .from('client_orgs')
+          .select('*')
+          .eq('org_id', userData.org_id)
+          .single();
+        
+        if (orgError || !orgData) {
+          throw new Error('Invalid organization ID');
+        }
+      }
+      
+      // Create user in Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: userData.email,
         password: userData.password,
         options: {
@@ -152,62 +165,85 @@ export class UserService {
         }
       });
 
-      if (error) {
-        console.error('Supabase auth error:', error);
-        throw error;
+      if (authError) {
+        console.error('Supabase auth error:', authError);
+        throw authError;
       }
 
-      if (!data.user) {
+      if (!authData.user) {
         throw new Error('Failed to create user - no user returned');
       }
 
-      console.log('User created successfully:', data.user.id);
+      console.log('Auth user created successfully:', authData.user.id);
 
-      // Wait a moment for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Create profile in appropriate table
+      if (userData.role.startsWith('admin')) {
+        // Create admin user profile
+        const { data: adminProfile, error: adminError } = await supabase
+          .from('admin_users')
+          .insert({
+            id: authData.user.id,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role
+          })
+          .select()
+          .single();
 
-      // Fetch the created profile to return
-      const { data: profile, error: profileError } = await supabase
-        .from('client_users')
-        .select(`
-          *,
-          client_orgs (
-            org_code,
-            org_name
-          )
-        `)
-        .eq('id', data.user.id)
-        .single();
+        if (adminError) {
+          console.error('Error creating admin profile:', adminError);
+          throw adminError;
+        }
 
-      if (profileError) {
-        console.error('Error fetching created profile:', profileError);
-        // Return a constructed profile if we can't fetch it
         return {
-          id: data.user.id,
-          name: userData.name,
-          email: userData.email,
-          role: userData.role,
-          organization: userData.organization,
-          orgCode: userData.orgCode,
-          org_id: userData.org_id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          id: adminProfile.id,
+          name: adminProfile.name,
+          email: adminProfile.email,
+          role: adminProfile.role,
+          organization: 'StratifyIT.ai',
+          orgCode: 'ADMIN',
+          created_at: adminProfile.created_at,
+          updated_at: adminProfile.created_at,
+          status: 'active'
+        };
+      } else {
+        // Create client user profile
+        const { data: clientProfile, error: clientError } = await supabase
+          .from('client_users')
+          .insert({
+            id: authData.user.id,
+            email: userData.email,
+            name: userData.name,
+            role: userData.role,
+            org_id: userData.org_id
+          })
+          .select(`
+            *,
+            client_orgs (
+              org_code,
+              org_name
+            )
+          `)
+          .single();
+
+        if (clientError) {
+          console.error('Error creating client profile:', clientError);
+          throw clientError;
+        }
+
+        return {
+          id: clientProfile.id,
+          name: clientProfile.name,
+          email: clientProfile.email,
+          role: clientProfile.role,
+          organization: clientProfile.client_orgs?.org_name || userData.organization,
+          orgCode: clientProfile.client_orgs?.org_code,
+          org_id: clientProfile.org_id,
+          created_at: clientProfile.created_at,
+          updated_at: clientProfile.created_at,
           status: 'active'
         };
       }
-
-      return {
-        id: profile.id,
-        name: profile.name,
-        email: profile.email || userData.email,
-        role: profile.role,
-        organization: profile.organization,
-        orgCode: profile.client_orgs?.org_code,
-        org_id: profile.org_id,
-        created_at: profile.created_at,
-        updated_at: profile.updated_at,
-        status: 'active'
-      };
 
     } catch (error) {
       console.error('Error creating user:', error);
@@ -348,7 +384,8 @@ export async function createClientUser({ email, password, name, role, org_id }: 
   org_id: number;
 }): Promise<any> {
   if (!supabase) throw new Error('Supabase client not initialized');
-  // 1. Create user in Supabase Auth, passing metadata
+  
+  // 1. Create user in Supabase Auth
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
@@ -360,23 +397,34 @@ export async function createClientUser({ email, password, name, role, org_id }: 
       }
     }
   });
+  
   if (signUpError) throw signUpError;
   const user = signUpData?.user;
   if (!user) throw new Error('User not returned from signUp');
-  // 2. Poll for client_users row to be created by trigger
-  let profile = null;
-  for (let i = 0; i < 5; i++) {
-    const { data, error } = await supabase
-      .from('client_users')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-    if (data) {
-      profile = data;
-      break;
-    }
-    await new Promise(res => setTimeout(res, 500));
+  
+  // 2. Create client_users profile directly
+  const { data: profile, error: profileError } = await supabase
+    .from('client_users')
+    .insert({
+      id: user.id,
+      email: email,
+      name: name,
+      role: role,
+      org_id: org_id
+    })
+    .select(`
+      *,
+      client_orgs (
+        org_code,
+        org_name
+      )
+    `)
+    .single();
+    
+  if (profileError) {
+    console.error('Error creating client profile:', profileError);
+    throw profileError;
   }
-  if (!profile) throw new Error('User profile not created in time');
+  
   return profile;
 }
