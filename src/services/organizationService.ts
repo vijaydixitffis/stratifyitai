@@ -44,11 +44,11 @@ export class OrganizationService {
         },
         {
           org_id: 2,
-          org_code: 'STRAT',
-          org_name: 'StratifyIT.ai',
-          description: 'IT consulting and strategy firm',
-          sector: 'Consulting',
-          remarks: 'Internal organization',
+          org_code: 'FFITS',
+          org_name: 'Future Focus IT Solutions',
+          description: 'IT solutions and consulting company',
+          sector: 'Technology',
+          remarks: 'Manasvee Dixit organization',
           created_at: '2024-01-10T09:15:00Z',
           updated_at: '2024-01-10T09:15:00Z'
         },

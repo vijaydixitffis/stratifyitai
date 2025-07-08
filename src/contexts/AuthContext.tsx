@@ -37,7 +37,7 @@ const mockUsers: User[] = [
     email: 'mike@stratifyit.ai',
     role: 'admin-consultant',
     organization: 'StratifyIT.ai',
-    orgCode: 'STRAT'
+    orgCode: 'ADMIN'
   },
   {
     id: '4',
@@ -45,7 +45,7 @@ const mockUsers: User[] = [
     email: 'lisa@stratifyit.ai',
     role: 'admin-architect',
     organization: 'StratifyIT.ai',
-    orgCode: 'STRAT'
+    orgCode: 'ADMIN'
   }
 ];
 
@@ -63,6 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         async (event, session) => {
           console.log('Auth state change:', event, session?.user?.id);
           if (session?.user) {
+            // Try to load from both admin and client tables
             await loadUserProfile(session.user.id);
           } else {
             setUser(null);
@@ -77,7 +78,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, []);
 
-  const loadUserProfile = async (userId: string, orgCode?: string) => {
+  const loadUserProfile = async (userId: string) => {
     // Prevent loading if user is already loaded with the same ID
     if (user?.id === userId) {
       console.log('User profile already loaded for:', userId);
@@ -86,29 +87,59 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     try {
       console.log('Loading user profile for:', userId);
-      // Fetch from client_users and join client_orgs
-      const { data: profile, error } = await supabase!
+      
+      // First try to find user in admin_users table
+      const { data: adminProfile, error: adminError } = await supabase!
+        .from('admin_users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+
+      if (adminProfile && !adminError) {
+        // User is an admin
+        const appUser: User = {
+          id: adminProfile.id,
+          name: adminProfile.name,
+          email: adminProfile.email || '',
+          role: adminProfile.role,
+          organization: 'StratifyIT.ai',
+          orgCode: 'ADMIN'
+        };
+        setUser(appUser);
+        console.log('Admin user profile loaded successfully:', appUser.name);
+        return;
+      }
+
+      // If not found in admin_users, try client_users
+      const { data: clientProfile, error: clientError } = await supabase!
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
         .single();
-      if (error) throw error;
-      
-      if (profile) {
+
+      if (clientProfile && !clientError) {
+        // User is a client
         const appUser: User = {
-          id: profile.id,
-          name: profile.name,
-          email: profile.email || '',
-          role: profile.role,
-          organization: profile.client_orgs?.org_name || profile.organization,
-          orgCode: profile.client_orgs?.org_code || profile.orgCode,
-          org_id: profile.org_id
+          id: clientProfile.id,
+          name: clientProfile.name,
+          email: clientProfile.email || '',
+          role: clientProfile.role,
+          organization: clientProfile.client_orgs?.org_name || clientProfile.organization,
+          orgCode: clientProfile.client_orgs?.org_code,
+          org_id: clientProfile.org_id
         };
         setUser(appUser);
-        console.log('User profile loaded successfully:', appUser.name);
+        console.log('Client user profile loaded successfully:', appUser.name);
+        return;
       }
+
+      // If user not found in either table
+      console.error('User profile not found in admin_users or client_users tables');
+      throw new Error('User profile not found');
+
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
+      throw error;
     }
   };
 
@@ -128,37 +159,69 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (orgCode: string, email: string, password: string) => {
     if (isSupabaseConfigured() && supabase) {
-      // Validate org code from client_orgs
-      const { data: orgData, error: orgError } = await supabase
-        .from('client_orgs')
-        .select('*')
-        .eq('org_code', orgCode.toUpperCase())
-        .single();
-      if (orgError || !orgData) {
-        throw new Error('Invalid organization code');
-      }
-      
-      // Authenticate with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
-      if (error) {
-        throw new Error(error.message);
-      }
-      
-      if (data.user) {
-        // Fetch from client_users with org_id
-        const { data: clientUser, error: clientError } = await supabase
-          .from('client_users')
-          .select('*')
-          .eq('id', data.user.id)
-          .eq('org_id', orgData.org_id)
-          .single();
-        if (clientError || !clientUser) {
-          throw new Error('User not found for this organization');
+      // Handle ADMIN org code differently
+      if (orgCode.toUpperCase() === 'ADMIN') {
+        // Authenticate with Supabase Auth
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) {
+          throw new Error(error.message);
         }
-        await loadUserProfile(data.user.id);
+        
+        if (data.user) {
+          // Check if user exists in admin_users table
+          const { data: adminUser, error: adminError } = await supabase
+            .from('admin_users')
+            .select('*')
+            .eq('id', data.user.id)
+            .single();
+          
+          if (adminError || !adminUser) {
+            await supabase.auth.signOut(); // Sign out if not an admin user
+            throw new Error('Access denied. Admin credentials required.');
+          }
+          
+          await loadUserProfile(data.user.id);
+        }
+      } else {
+        // Validate org code from client_orgs for client users
+        const { data: orgData, error: orgError } = await supabase
+          .from('client_orgs')
+          .select('*')
+          .eq('org_code', orgCode.toUpperCase())
+          .single();
+        
+        if (orgError || !orgData) {
+          throw new Error('Invalid organization code');
+        }
+        
+        // Authenticate with Supabase Auth
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) {
+          throw new Error(error.message);
+        }
+        
+        if (data.user) {
+          // Check if user exists in client_users table with correct org_id
+          const { data: clientUser, error: clientError } = await supabase
+            .from('client_users')
+            .select('*')
+            .eq('id', data.user.id)
+            .eq('org_id', orgData.org_id)
+            .single();
+          
+          if (clientError || !clientUser) {
+            await supabase.auth.signOut(); // Sign out if user not found for this org
+            throw new Error('User not found for this organization');
+          }
+          
+          await loadUserProfile(data.user.id);
+        }
       }
     } else {
       // Mock authentication for demo
