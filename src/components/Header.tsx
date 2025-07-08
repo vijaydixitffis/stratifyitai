@@ -1,21 +1,19 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Shield, User, LogOut, Menu } from 'lucide-react';
+import { Shield, User, LogOut, Menu, Plus, Building } from 'lucide-react';
 import { useSelectedOrg } from '../contexts/SelectedOrgContext';
-import { useEffect, useState } from 'react';
-import { OrganizationService, Organization } from '../services/organizationService';
+import { useEffect } from 'react';
+import { Organization } from '../services/organizationService';
 
-const Header: React.FC = () => {
+type HeaderProps = {
+  onShowOnboardOrg?: () => void;
+  orgs: Organization[];
+  reloadOrgs: () => Promise<void>;
+};
+
+const Header: React.FC<HeaderProps> = ({ onShowOnboardOrg, orgs, reloadOrgs }) => {
   const { user, logout, isAdmin } = useAuth();
   const { selectedOrg, setSelectedOrg } = useSelectedOrg();
-  const [orgs, setOrgs] = useState<Organization[]>([]);
-
-  // Only load orgs if admin and ADMIN org
-  useEffect(() => {
-    if (user && isAdmin && user.orgCode === 'ADMIN') {
-      OrganizationService.getOrganizations().then(setOrgs);
-    }
-  }, [user, isAdmin]);
 
   // Set default selected org to user's org on login
   useEffect(() => {
@@ -38,20 +36,31 @@ const Header: React.FC = () => {
             <div className="flex items-center space-x-4">
               {/* Org selector for ADMIN admins */}
               {isAdmin && user.orgCode === 'ADMIN' && (
-                <select
-                  className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={selectedOrg?.org_id || ''}
-                  onChange={e => {
-                    const org = orgs.find(o => o.org_id === Number(e.target.value));
-                    if (org) setSelectedOrg(org);
-                  }}
-                >
-                  {orgs.map(org => (
-                    <option key={org.org_id} value={org.org_id}>
-                      {org.org_name} ({org.org_code})
-                    </option>
-                  ))}
-                </select>
+                <>
+                  <select
+                    className="border border-gray-300 rounded px-2 py-1 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={selectedOrg?.org_id || ''}
+                    onChange={e => {
+                      const org = orgs.find(o => o.org_id === Number(e.target.value));
+                      if (org) setSelectedOrg(org);
+                    }}
+                  >
+                    {orgs.map(org => (
+                      <option key={org.org_id} value={org.org_id}>
+                        {org.org_name} ({org.org_code})
+                      </option>
+                    ))}
+                  </select>
+                  {/* Onboard Org Button immediately after dropdown */}
+                  <button
+                    onClick={onShowOnboardOrg}
+                    title="Onboard Organization"
+                    className="flex items-center justify-center bg-green-600 text-white p-2 rounded-md hover:bg-green-700 transition-colors disabled:opacity-50 ml-2"
+                  >
+                    <Plus className="h-5 w-5" />
+                    <Building className="h-5 w-5 ml-1" />
+                  </button>
+                </>
               )}
               <div className="flex items-center space-x-2">
                 <User className="h-5 w-5 text-gray-400" />

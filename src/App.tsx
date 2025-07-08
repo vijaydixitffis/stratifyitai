@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AssetProvider } from './contexts/AssetContext';
 import Header from './components/Header';
@@ -9,11 +9,33 @@ import AssetInventory from './components/AssetInventory';
 import AssessmentsDashboard from './components/AssessmentsDashboard';
 import ClientManagement from './components/ClientManagement';
 import { Loader2 } from 'lucide-react';
-import { SelectedOrgProvider } from './contexts/SelectedOrgContext';
+import { SelectedOrgProvider, useSelectedOrg } from './contexts/SelectedOrgContext';
+import { OrganizationService, Organization } from './services/organizationService';
+
+// Add prop types for ClientManagement
+type ClientManagementProps = {
+  showOnboardOrgForm: boolean;
+  setShowOnboardOrgForm: (show: boolean) => void;
+  onOrgOnboarded: (org: any, user: any) => void;
+  orgOnboarded: { org: any, user: any } | null;
+  orgs: Organization[];
+  reloadOrgs: () => Promise<void>;
+};
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
+  const { setSelectedOrg } = useSelectedOrg();
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [showOnboardOrgForm, setShowOnboardOrgForm] = useState(false);
+  const [orgOnboarded, setOrgOnboarded] = useState<null | { org: any, user: any }>(null);
+  const [orgs, setOrgs] = useState<Organization[]>([]);
+
+  // Load orgs on mount and when needed
+  const reloadOrgs = async () => {
+    const orgList = await OrganizationService.getOrganizations();
+    setOrgs(orgList);
+  };
+  useEffect(() => { reloadOrgs(); }, []);
 
   if (loading) {
     return (
@@ -29,6 +51,20 @@ const AppContent: React.FC = () => {
   if (!user) {
     return <LoginForm />;
   }
+
+  // Handler for Onboard Org button: always go to clients tab and open modal
+  const handleShowOnboardOrg = () => {
+    setActiveTab('clients');
+    setShowOnboardOrgForm(true);
+  };
+
+  // Handler to be called after org is onboarded
+  const handleOrgOnboarded = async (org: any, user: any) => {
+    await reloadOrgs();
+    setSelectedOrg(org);
+    setOrgOnboarded({ org, user });
+    setShowOnboardOrgForm(false);
+  };
 
   const renderContent = () => {
     switch (activeTab) {
@@ -50,7 +86,14 @@ const AppContent: React.FC = () => {
       case 'clients':
         return (
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <ClientManagement />
+            <ClientManagement 
+              showOnboardOrgForm={showOnboardOrgForm}
+              setShowOnboardOrgForm={setShowOnboardOrgForm}
+              onOrgOnboarded={handleOrgOnboarded}
+              orgOnboarded={orgOnboarded}
+              orgs={orgs}
+              reloadOrgs={reloadOrgs}
+            />
           </div>
         );
       case 'reports':
@@ -78,11 +121,12 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header />
+      <Header onShowOnboardOrg={handleShowOnboardOrg} orgs={orgs} reloadOrgs={reloadOrgs} />
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
       <main>
         {renderContent()}
       </main>
+      {/* Onboard Organization Modal is globally accessible */}
     </div>
   );
 };
