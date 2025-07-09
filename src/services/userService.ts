@@ -402,62 +402,74 @@ export async function createClientUser({ email, password, name, role, org_id }: 
     throw new Error('Invalid organization ID');
   }
   
-  // 1. Create user in Supabase Auth
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: undefined, // Disable email confirmation
-      data: {
-        name,
-        role,
-        org_id,
+  try {
+    // 1. Create user in Supabase Auth
+    console.log('Step 1: Creating auth user...');
+    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: undefined, // Disable email confirmation
+        data: {
+          name,
+          role,
+          org_id,
+        }
       }
-    }
-  });
-  
-  if (signUpError) {
-    console.error('Auth signup error:', signUpError);
-    throw signUpError;
-  }
-  
-  const user = signUpData?.user;
-  if (!user) {
-    console.error('No user returned from signUp');
-    throw new Error('User not returned from signUp');
-  }
-  
-  console.log('Auth user created:', user.id);
-  
-  // Wait for the trigger to create the profile entry
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // 2. Create client_users profile directly
-  const { data: profile, error: profileError } = await supabase
-    .from('client_users')
-    .insert({
-      id: user.id,
-      email: email,
-      name: name,
-      role: role,
-      org_id: org_id
-    })
-    .select(`
-      *,
-      client_orgs (
-        org_code,
-        org_name
-      )
-    `)
-    .single();
+    });
     
-  if (profileError) {
-    console.error('Error creating client profile:', profileError);
-    // If profile creation fails, we should clean up the auth user
-    // Note: In production, you'd want to use admin API for this
-    throw profileError;
+    if (signUpError) {
+      console.error('Auth signup error:', signUpError);
+      throw new Error(`Authentication failed: ${signUpError.message}`);
+    }
+    
+    const user = signUpData?.user;
+    if (!user) {
+      console.error('No user returned from signUp');
+      throw new Error('User creation failed - no user returned');
+    }
+    
+    console.log('Step 2: Auth user created successfully:', user.id);
+    
+    // 2. Create client_users profile directly (don't rely on trigger)
+    console.log('Step 3: Creating client profile...');
+    const { data: profile, error: profileError } = await supabase
+      .from('client_users')
+      .insert({
+        id: user.id,
+        email: email,
+        name: name,
+        role: role,
+        org_id: org_id
+      })
+      .select(`
+        *,
+        client_orgs (
+          org_code,
+          org_name
+        )
+      `)
+      .single();
+      
+    if (profileError) {
+      console.error('Error creating client profile:', profileError);
+      
+      // Clean up the auth user if profile creation fails
+      try {
+        console.log('Cleaning up auth user due to profile creation failure...');
+        await supabase.auth.admin.deleteUser(user.id);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup auth user:', cleanupError);
+      }
+      
+      throw new Error(`Profile creation failed: ${profileError.message}`);
+    }
+    
+    console.log('Step 4: Client profile created successfully:', profile);
+    return profile;
+    
+  } catch (error) {
+    console.error('Error in createClientUser:', error);
+    throw error;
   }
-  
-  console.log('Client profile created successfully:', profile);
-  return profile;
 }

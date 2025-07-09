@@ -141,7 +141,12 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       
       console.log('Creating client user for organization:', selectedOrg);
       
-      const profile = await createClientUser({
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('User creation timed out after 30 seconds')), 30000);
+      });
+      
+      const createUserPromise = createClientUser({
         name: formData.name,
         email: formData.email,
         role: formData.role,
@@ -149,11 +154,10 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
         org_id: selectedOrg.org_id,
       });
       
-      console.log('Client user created successfully:', profile);
+      // Race between user creation and timeout
+      const profile = await Promise.race([createUserPromise, timeoutPromise]);
       
-      // Close modal and reset form immediately
-      setShowCreateForm(false);
-      resetForm();
+      console.log('Client user created successfully:', profile);
       
       // Add the new user to the local state immediately
       const newUser: ClientUser = {
@@ -171,11 +175,24 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       
       setClients(prev => [newUser, ...prev]);
       
+      // Close modal and reset form after successful creation
+      setShowCreateForm(false);
+      resetForm();
+      
       console.log('Client user created and added to list successfully');
       
     } catch (err: any) {
       console.error('Error creating client user:', err);
-      const errorMessage = err.message || err.toString();
+      let errorMessage = 'Unknown error occurred';
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      } else if (err?.message) {
+        errorMessage = err.message;
+      }
+      
       setError(`Failed to create client user: ${errorMessage}`);
     } finally {
       setSubmitting(false);
