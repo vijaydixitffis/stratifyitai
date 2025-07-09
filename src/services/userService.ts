@@ -385,6 +385,8 @@ export async function createClientUser({ email, password, name, role, org_id }: 
 }): Promise<any> {
   if (!supabase) throw new Error('Supabase client not initialized');
   
+  console.log('Creating client user with:', { email, name, role, org_id });
+  
   // 1. Create user in Supabase Auth
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
@@ -398,9 +400,18 @@ export async function createClientUser({ email, password, name, role, org_id }: 
     }
   });
   
-  if (signUpError) throw signUpError;
+  if (signUpError) {
+    console.error('Auth signup error:', signUpError);
+    throw signUpError;
+  }
+  
   const user = signUpData?.user;
-  if (!user) throw new Error('User not returned from signUp');
+  if (!user) {
+    console.error('No user returned from signUp');
+    throw new Error('User not returned from signUp');
+  }
+  
+  console.log('Auth user created:', user.id);
   
   // 2. Create client_users profile directly
   const { data: profile, error: profileError } = await supabase
@@ -423,8 +434,11 @@ export async function createClientUser({ email, password, name, role, org_id }: 
     
   if (profileError) {
     console.error('Error creating client profile:', profileError);
+    // If profile creation fails, we should clean up the auth user
+    // Note: In production, you'd want to use admin API for this
     throw profileError;
   }
   
+  console.log('Client profile created successfully:', profile);
   return profile;
 }

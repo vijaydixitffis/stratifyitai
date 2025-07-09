@@ -140,15 +140,6 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       if (!selectedOrg) throw new Error('No organization selected');
       
       console.log('Creating client user for organization:', selectedOrg);
-      console.log('Form data:', {
-        name: formData.name,
-        email: formData.email,
-        role: formData.role,
-        password: formData.password,
-        org_id: selectedOrg.org_id,
-        organization: selectedOrg.org_name,
-        orgCode: selectedOrg.org_code
-      });
       
       const profile = await createClientUser({
         name: formData.name,
@@ -159,14 +150,28 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       });
       
       console.log('Client user created successfully:', profile);
-      // Move modal close and form reset before loading clients
+      
+      // Close modal and reset form immediately
       setShowCreateForm(false);
       resetForm();
-      console.log('Modal closed and form reset. Now loading clients...');
-      // Refresh the client list
-      await loadClients();
       
-      console.log('Client user created and form closed successfully');
+      // Add the new user to the local state immediately
+      const newUser: ClientUser = {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        organization: selectedOrg.org_name,
+        orgCode: selectedOrg.org_code,
+        org_id: selectedOrg.org_id,
+        created_at: profile.created_at || new Date().toISOString(),
+        updated_at: profile.updated_at || new Date().toISOString(),
+        status: 'active'
+      };
+      
+      setClients(prev => [newUser, ...prev]);
+      
+      console.log('Client user created and added to list successfully');
       
     } catch (err: any) {
       console.error('Error creating client user:', err);
