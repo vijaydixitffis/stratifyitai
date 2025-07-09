@@ -33,10 +33,10 @@ echo "Cleanup completed!"
 echo "Redundant migrations backed up to: $BACKUP_DIR"
 echo ""
 echo "Remaining migrations:"
-ls -la supabase/migrations/*.sql
+ls -la supabase/migrations/*.sql 2>/dev/null || echo "No migration files found"
 
 echo ""
 echo "Next steps:"
 echo "1. Run: supabase db reset"
 echo "2. Run: supabase db push"
-echo "3. Verify the database structure" 
+echo "3. Verify the database structure"
