@@ -155,80 +155,73 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (orgCode: string, email: string, password: string) => {
     if (isSupabaseConfigured() && supabase) {
-      setLoading(true);
-      
-      // Handle ADMIN org code differently
-      if (orgCode.toUpperCase() === 'ADMIN') {
-        // Authenticate with Supabase Auth
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        if (data.user) {
-          // Check if user exists in admin_users table
-          const { data: adminUser, error: adminError } = await supabase
-            .from('admin_users')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-          
-          if (adminError || !adminUser) {
-            await supabase.auth.signOut(); // Sign out if not an admin user
-            throw new Error('Access denied. Admin credentials required.');
+      try {
+        // Handle ADMIN org code differently
+        if (orgCode.toUpperCase() === 'ADMIN') {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) {
+            setUser(null);
+            throw new Error('Invalid email or password. Please try again.');
           }
-          
-          await loadUserProfile(data.user.id);
-        }
-      } else {
-        // Validate org code from client_orgs for client users
-        const { data: orgData, error: orgError } = await supabase
-          .from('client_orgs')
-          .select('*')
-          .eq('org_code', orgCode.toUpperCase())
-          .single();
-        
-        if (orgError || !orgData) {
-          throw new Error('Invalid organization code');
-        }
-        
-        // Authenticate with Supabase Auth
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        if (error) {
-          throw new Error(error.message);
-        }
-        
-        if (data.user) {
-          // Check if user exists in client_users table with correct org_id
-          const { data: clientUser, error: clientError } = await supabase
-            .from('client_users')
-            .select('*')
-            .eq('id', data.user.id)
-            .eq('org_id', orgData.org_id)
-            .single();
-          
-          if (clientError || !clientUser) {
-            await supabase.auth.signOut(); // Sign out if user not found for this org
-            throw new Error('User not found for this organization');
+          if (data.user) {
+            const { data: adminUser, error: adminError } = await supabase
+              .from('admin_users')
+              .select('*')
+              .eq('id', data.user.id)
+              .single();
+            if (adminError || !adminUser) {
+              await supabase.auth.signOut();
+              setUser(null);
+              throw new Error('Access denied. Admin credentials required.');
+            }
+            await loadUserProfile(data.user.id);
           }
-          
-          await loadUserProfile(data.user.id);
+        } else {
+          // Validate org code from client_orgs for client users
+          const { data: orgData, error: orgError } = await supabase
+            .from('client_orgs')
+            .select('*')
+            .eq('org_code', orgCode.toUpperCase())
+            .single();
+          if (orgError || !orgData) {
+            setUser(null);
+            throw new Error('Invalid organization code.');
+          }
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+          if (error) {
+            setUser(null);
+            throw new Error('Invalid email or password. Please try again.');
+          }
+          if (data.user) {
+            const { data: clientUser, error: clientError } = await supabase
+              .from('client_users')
+              .select('*')
+              .eq('id', data.user.id)
+              .eq('org_id', orgData.org_id)
+              .single();
+            if (clientError || !clientUser) {
+              await supabase.auth.signOut();
+              setUser(null);
+              throw new Error('User not found for this organization.');
+            }
+            await loadUserProfile(data.user.id);
+          }
+        }
+      } catch (error) {
+        setUser(null);
+        if (error instanceof Error) {
+          throw new Error(error.message || 'Login failed. Please check your credentials.');
+        } else {
+          throw new Error('Login failed. Please check your credentials.');
         }
       }
-      
-      setLoading(false);
     } else {
       // Mock authentication for demo
       const foundUser = mockUsers.find(u => u.email === email && u.orgCode === orgCode.toUpperCase());
       if (foundUser && password === 'demo123') {
         setUser(foundUser);
       } else {
+        setUser(null);
         throw new Error('Invalid credentials. Use demo123 as password for demo accounts.');
       }
     }

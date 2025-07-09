@@ -66,6 +66,12 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   };
 
   const refreshAssets = async () => {
+    if (!user) {
+      setAssets([]);
+      setError('You must be logged in to view assets.');
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
       setError(null);

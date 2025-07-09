@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { UserService, UserProfile, createClientUser } from '../services/userService';
 import { OrganizationService, Organization } from '../services/organizationService';
-import { AssetService } from '../services/assetService';
 import { useSelectedOrg } from '../contexts/SelectedOrgContext';
 
 // Use the UserProfile interface from the service
@@ -77,10 +76,11 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
     cxoId: string;
   } | null>(null);
 
+  // Arrange role options in desired order
   const roleOptions = [
-    { value: 'client-manager', label: 'Client Manager', description: 'Manages client projects and communications' },
-    { value: 'client-architect', label: 'Client Architect', description: 'Technical architect for client solutions' },
     { value: 'client-cxo', label: 'Client CXO', description: 'Executive level client contact' },
+    { value: 'client-architect', label: 'Client Architect', description: 'Technical architect for client solutions' },
+    { value: 'client-manager', label: 'Client Manager', description: 'Manages client projects and communications' },
     { value: 'admin-consultant', label: 'Admin Consultant', description: 'Internal consultant with admin access' },
     { value: 'admin-architect', label: 'Admin Architect', description: 'Technical architect with admin access' },
     { value: 'admin-super', label: 'Super Admin', description: 'Full system administration access' }
@@ -138,8 +138,6 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
     
     try {
       if (!selectedOrg) throw new Error('No organization selected');
-      
-      console.log('Creating client user for organization:', selectedOrg);
       
       // Add timeout to prevent hanging
       const timeoutPromise = new Promise((_, reject) => {
@@ -219,6 +217,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       ));
       setEditingClient(null);
       resetForm();
+      setShowCreateForm(false); // Close the modal after successful edit
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update client');
       console.error('Error updating client:', err);
@@ -253,6 +252,20 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
     });
   };
 
+  // Fix: Reset form when opening add new user modal
+  const handleShowCreateForm = () => {
+    setEditingClient(null);
+    setFormData({
+      name: '',
+      email: '', // Always blank
+      role: 'client-cxo', // Default to first in dropdown
+      organization: '',
+      password: '' // Always blank
+    });
+    setShowCreateForm(true);
+  };
+
+  // Fix: Open edit form with selected user's data
   const openEditForm = (client: ClientUser) => {
     setEditingClient(client);
     setFormData({
@@ -262,6 +275,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
       organization: client.organization,
       password: ''
     });
+    setShowCreateForm(true);
   };
 
   const filteredClients = selectedOrg
@@ -422,7 +436,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
           </div>
         )}
         <button
-          onClick={() => setShowCreateForm(true)}
+          onClick={handleShowCreateForm}
           disabled={submitting || !selectedOrg}
           className="flex items-center space-x-2 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
         >
@@ -592,12 +606,16 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto">
               <h2 className="text-xl font-bold mb-4">
-                Add New User to {selectedOrg?.org_name}
+                {editingClient ? 'Edit User' : 'Add New User to'} {selectedOrg?.org_name}
               </h2>
               
               <form onSubmit={(e) => {
                 e.preventDefault();
-                handleCreateClient(formData);
+                if (editingClient) {
+                  handleUpdateClient(e);
+                } else {
+                  handleCreateClient(formData);
+                }
               }} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
@@ -678,7 +696,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
                     {submitting ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      'Create User'
+                      editingClient ? 'Update User' : 'Create User'
                     )}
                   </button>
                   <button

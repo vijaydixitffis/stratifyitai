@@ -33,7 +33,12 @@ const LoginForm: React.FC = () => {
     try {
       await login(orgCode, email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
+      console.error('Login error:', err);
+      setError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Login failed. Please check your email, password, and organization code.'
+      );
     } finally {
       setLoading(false);
     }
