@@ -155,6 +155,7 @@ export class UserService {
         email: userData.email,
         password: userData.password,
         options: {
+          emailRedirectTo: undefined, // Disable email confirmation
           data: {
             name: userData.name,
             role: userData.role,
@@ -175,6 +176,9 @@ export class UserService {
       }
 
       console.log('Auth user created successfully:', authData.user.id);
+
+      // Wait a moment for the trigger to create the users table entry
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Create profile in appropriate table
       if (userData.role.startsWith('admin')) {
@@ -387,11 +391,23 @@ export async function createClientUser({ email, password, name, role, org_id }: 
   
   console.log('Creating client user with:', { email, name, role, org_id });
   
+  // Check if organization exists first
+  const { data: orgData, error: orgError } = await supabase
+    .from('client_orgs')
+    .select('*')
+    .eq('org_id', org_id)
+    .single();
+    
+  if (orgError || !orgData) {
+    throw new Error('Invalid organization ID');
+  }
+  
   // 1. Create user in Supabase Auth
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,
     options: {
+      emailRedirectTo: undefined, // Disable email confirmation
       data: {
         name,
         role,
@@ -412,6 +428,34 @@ export async function createClientUser({ email, password, name, role, org_id }: 
   }
   
   console.log('Auth user created:', user.id);
+  
+  // Wait for the trigger to create the users table entry
+  await new Promise(resolve => setTimeout(resolve, 1500));
+  
+  // Verify the user exists in the users table
+  const { data: userCheck, error: userCheckError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('id', user.id)
+    .single();
+    
+  if (userCheckError || !userCheck) {
+    console.error('User not found in users table:', userCheckError);
+    // Manually insert if trigger didn't work
+    const { error: insertError } = await supabase
+      .from('users')
+      .insert({
+        id: user.id,
+        email: email,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      });
+      
+    if (insertError) {
+      console.error('Failed to manually insert user:', insertError);
+      throw new Error('Failed to create user profile');
+    }
+  }
   
   // 2. Create client_users profile directly
   const { data: profile, error: profileError } = await supabase

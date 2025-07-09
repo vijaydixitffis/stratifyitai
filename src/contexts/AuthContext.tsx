@@ -155,6 +155,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const login = async (orgCode: string, email: string, password: string) => {
     if (isSupabaseConfigured() && supabase) {
+      setLoading(true);
+      
       // Handle ADMIN org code differently
       if (orgCode.toUpperCase() === 'ADMIN') {
         // Authenticate with Supabase Auth
@@ -219,6 +221,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           await loadUserProfile(data.user.id);
         }
       }
+      
+      setLoading(false);
     } else {
       // Mock authentication for demo
       const foundUser = mockUsers.find(u => u.email === email && u.orgCode === orgCode.toUpperCase());
