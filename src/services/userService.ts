@@ -177,7 +177,7 @@ export class UserService {
 
       console.log('Auth user created successfully:', authData.user.id);
 
-      // Wait a moment for the trigger to create the users table entry
+      // Wait a moment for the trigger to create the profile entry
       await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Create profile in appropriate table
@@ -429,33 +429,8 @@ export async function createClientUser({ email, password, name, role, org_id }: 
   
   console.log('Auth user created:', user.id);
   
-  // Wait for the trigger to create the users table entry
+  // Wait for the trigger to create the profile entry
   await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // Verify the user exists in the users table
-  const { data: userCheck, error: userCheckError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', user.id)
-    .single();
-    
-  if (userCheckError || !userCheck) {
-    console.error('User not found in users table:', userCheckError);
-    // Manually insert if trigger didn't work
-    const { error: insertError } = await supabase
-      .from('users')
-      .insert({
-        id: user.id,
-        email: email,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      });
-      
-    if (insertError) {
-      console.error('Failed to manually insert user:', insertError);
-      throw new Error('Failed to create user profile');
-    }
-  }
   
   // 2. Create client_users profile directly
   const { data: profile, error: profileError } = await supabase
