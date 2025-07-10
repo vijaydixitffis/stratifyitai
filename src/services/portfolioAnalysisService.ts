@@ -165,12 +165,12 @@ export class PortfolioAnalysisService {
   // Fetch all categories
   static async getCategories(): Promise<PACategory[]> {
     if (!this.isSupabaseAvailable()) {
-      console.log('Using mock data - Supabase not configured');
+      console.log('Using mock data for PA categories - Supabase not configured');
       return Promise.resolve([...mockCategories]);
     }
 
     try {
-      console.log('Fetching PA categories from Supabase...');
+      console.log('Fetching PA categories from Supabase for authenticated user...');
       const { data, error } = await supabase!
         .from('pa_categories')
         .select('*')
@@ -178,11 +178,15 @@ export class PortfolioAnalysisService {
         .order('sort_order', { ascending: true });
 
       if (error) {
-        console.error('Supabase error fetching PA categories:', error);
+        console.error('Error fetching PA categories:', error);
+        // If it's a permission error, provide helpful message
+        if (error.code === '42501' || error.message.includes('permission')) {
+          throw new Error('Access denied. Please ensure you are logged in with proper permissions.');
+        }
         throw new Error(`Failed to fetch categories: ${error.message}`);
       }
 
-      console.log('Successfully fetched PA categories from Supabase:', data?.length || 0);
+      console.log('Successfully fetched PA categories:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('Error in getCategories:', error);
@@ -198,7 +202,7 @@ export class PortfolioAnalysisService {
     }
 
     try {
-      console.log('Fetching PA assessments for category:', categoryId);
+      console.log('Fetching PA assessments for category:', categoryId, 'for authenticated user');
       const { data, error } = await supabase!
         .from('pa_assessments')
         .select('*')
@@ -207,11 +211,15 @@ export class PortfolioAnalysisService {
         .order('sort_order', { ascending: true });
 
       if (error) {
-        console.error('Supabase error fetching PA assessments:', error);
+        console.error('Error fetching PA assessments:', error);
+        // If it's a permission error, provide helpful message
+        if (error.code === '42501' || error.message.includes('permission')) {
+          throw new Error('Access denied. Please ensure you are logged in with proper permissions.');
+        }
         throw new Error(`Failed to fetch assessments: ${error.message}`);
       }
 
-      console.log('Successfully fetched PA assessments from Supabase:', data?.length || 0);
+      console.log('Successfully fetched PA assessments for category:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('Error in getAssessmentsByCategory:', error);
@@ -226,7 +234,7 @@ export class PortfolioAnalysisService {
     }
 
     try {
-      console.log('Fetching all PA assessments from Supabase...');
+      console.log('Fetching all PA assessments for authenticated user...');
       const { data, error } = await supabase!
         .from('pa_assessments')
         .select('*')
@@ -234,11 +242,15 @@ export class PortfolioAnalysisService {
         .order('category_id, sort_order', { ascending: true });
 
       if (error) {
-        console.error('Supabase error fetching all PA assessments:', error);
+        console.error('Error fetching all PA assessments:', error);
+        // If it's a permission error, provide helpful message
+        if (error.code === '42501' || error.message.includes('permission')) {
+          throw new Error('Access denied. Please ensure you are logged in with proper permissions.');
+        }
         throw new Error(`Failed to fetch assessments: ${error.message}`);
       }
 
-      console.log('Successfully fetched all PA assessments from Supabase:', data?.length || 0);
+      console.log('Successfully fetched all PA assessments:', data?.length || 0);
       return data || [];
     } catch (error) {
       console.error('Error in getAllAssessments:', error);

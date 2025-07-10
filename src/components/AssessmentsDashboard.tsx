@@ -69,17 +69,22 @@ const AssessmentsDashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
+      console.log('Loading portfolio analysis categories and assessments...');
       const data = await PortfolioAnalysisService.getCategoriesWithAssessments();
+      console.log('Loaded categories with assessments:', data.length);
       setCategories(data);
     } catch (err) {
       console.error('Error loading portfolio analysis data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load portfolio analysis data');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load portfolio analysis data';
+      console.error('Portfolio analysis error details:', errorMessage);
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
   const handleRefresh = () => {
+    console.log('Refreshing portfolio analysis data...');
     loadCategories();
   };
 
