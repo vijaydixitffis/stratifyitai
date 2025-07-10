@@ -25,12 +25,15 @@ import {
   Server,
   Code,
   TrendingUp,
-  Building
+  Building,
+  X,
+  ArrowLeft
 } from 'lucide-react';
 
 const AssessmentsDashboard: React.FC = () => {
   const { user, isClient, isAdmin } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
 
   const assessmentCategories = [
     {
@@ -331,6 +334,23 @@ const AssessmentsDashboard: React.FC = () => {
     }
   };
 
+  const handleCategoryClick = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+  };
+
+  const handleAssessmentClick = (assessment: any) => {
+    setSelectedAssessment(assessment);
+  };
+
+  const handleStartAssessment = (assessment: any) => {
+    // TODO: Implement assessment start logic
+    console.log('Starting assessment:', assessment.name);
+    setSelectedAssessment(null);
+    setSelectedCategory(null);
+  };
+
+  const selectedCategoryData = assessmentCategories.find(cat => cat.id === selectedCategory);
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
@@ -347,9 +367,9 @@ const AssessmentsDashboard: React.FC = () => {
           <h2 className="text-xl font-bold text-blue-900">Assessment Framework</h2>
         </div>
         <p className="text-blue-800 mb-4">
-          Our comprehensive assessment framework evaluates your IT portfolio across five key dimensions: 
+          Our comprehensive assessment framework evaluates your IT portfolio across six key dimensions: 
           Strategy & Enterprise Architecture, Digital Ecosystem Readiness, IT Optimization & Consolidation, 
-          Technology Architecture, and Enterprise Architecture Governance.
+          Technology Architecture, Enterprise Architecture Governance, and Specialized Assessments.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-white p-3 rounded-lg border border-blue-200">
@@ -367,75 +387,34 @@ const AssessmentsDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Assessment Categories */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 mb-8">
+      {/* Assessment Categories Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {assessmentCategories.map((category) => {
           const Icon = category.icon;
           return (
             <div
               key={category.id}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition-shadow cursor-pointer"
-              onClick={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
+              className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all duration-200 cursor-pointer group"
+              onClick={() => handleCategoryClick(category.id)}
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
-                  <div className={`p-3 rounded-lg ${category.color}`}>
+                  <div className={`p-3 rounded-lg ${category.color} group-hover:scale-110 transition-transform duration-200`}>
                     <Icon className="h-6 w-6 text-white" />
                   </div>
-                  <ChevronRight 
-                    className={`h-5 w-5 text-gray-400 transition-transform ${
-                      selectedCategory === category.id ? 'rotate-90' : ''
-                    }`} 
-                  />
+                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{category.title}</h3>
-                <p className="text-sm text-gray-600 mb-4">{category.description}</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-900 transition-colors">
+                  {category.title}
+                </h3>
+                <p className="text-sm text-gray-600 mb-4 line-clamp-3">{category.description}</p>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-500">{category.assessments.length} assessments</span>
-                  <span className="text-blue-600 font-medium">
-                    {selectedCategory === category.id ? 'Hide Details' : 'View Details'}
+                  <span className="text-blue-600 font-medium group-hover:text-blue-800 transition-colors">
+                    View Assessments
                   </span>
                 </div>
               </div>
-
-              {/* Expanded Assessment List */}
-              {selectedCategory === category.id && (
-                <div className="border-t border-gray-200 bg-gray-50">
-                  <div className="p-4 space-y-3">
-                    {category.assessments.map((assessment) => (
-                      <div
-                        key={assessment.id}
-                        className="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-2">
-                          <h4 className="font-medium text-gray-900">{assessment.name}</h4>
-                          <div className="flex items-center space-x-2">
-                            {getStatusIcon(assessment.status)}
-                            <button className="text-blue-600 hover:text-blue-800 transition-colors">
-                              <Play className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-3">{assessment.description}</p>
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="flex items-center space-x-3">
-                            <span className="text-gray-500">
-                              <Clock className="h-3 w-3 inline mr-1" />
-                              {assessment.duration}
-                            </span>
-                            <span className={`px-2 py-1 rounded-full ${getComplexityColor(assessment.complexity)}`}>
-                              {assessment.complexity}
-                            </span>
-                          </div>
-                          <button className="text-blue-600 hover:text-blue-800 font-medium transition-colors">
-                            Start Assessment
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           );
         })}
@@ -527,6 +506,166 @@ const AssessmentsDashboard: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Category Assessments Modal */}
+      {selectedCategory && selectedCategoryData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setSelectedCategory(null)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="h-5 w-5 text-gray-600" />
+                  </button>
+                  <div className={`p-3 rounded-lg ${selectedCategoryData.color}`}>
+                    <selectedCategoryData.icon className="h-6 w-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{selectedCategoryData.title}</h2>
+                    <p className="text-sm text-gray-600">{selectedCategoryData.assessments.length} assessments available</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedCategory(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-gray-700">{selectedCategoryData.description}</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {selectedCategoryData.assessments.map((assessment) => (
+                  <div
+                    key={assessment.id}
+                    className="bg-white p-4 rounded-lg border border-gray-200 hover:border-blue-300 hover:shadow-md transition-all duration-200 cursor-pointer group"
+                    onClick={() => handleAssessmentClick(assessment)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <h4 className="font-medium text-gray-900 group-hover:text-blue-900 transition-colors">
+                        {assessment.name}
+                      </h4>
+                      <div className="flex items-center space-x-2">
+                        {getStatusIcon(assessment.status)}
+                        <ChevronRight className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">{assessment.description}</p>
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-gray-500 flex items-center">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {assessment.duration}
+                        </span>
+                        <span className={`px-2 py-1 rounded-full ${getComplexityColor(assessment.complexity)}`}>
+                          {assessment.complexity}
+                        </span>
+                      </div>
+                      <span className="text-blue-600 font-medium group-hover:text-blue-800 transition-colors">
+                        View Details
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Assessment Details Modal */}
+      {selectedAssessment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center space-x-3">
+                  <button
+                    onClick={() => setSelectedAssessment(null)}
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="h-5 w-5 text-gray-600" />
+                  </button>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">{selectedAssessment.name}</h2>
+                    <p className="text-sm text-gray-600">Assessment Details</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedAssessment(null)}
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Description</h3>
+                  <p className="text-gray-900">{selectedAssessment.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Duration</h3>
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span className="text-gray-900">{selectedAssessment.duration}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Complexity</h3>
+                    <span className={`px-2 py-1 rounded-full text-sm ${getComplexityColor(selectedAssessment.complexity)}`}>
+                      {selectedAssessment.complexity}
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-2">Status</h3>
+                  <div className="flex items-center space-x-2">
+                    {getStatusIcon(selectedAssessment.status)}
+                    <span className="text-gray-900 capitalize">{selectedAssessment.status}</span>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-blue-900 mb-2">What's Included</h3>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Comprehensive assessment questionnaire</li>
+                    <li>• Current state analysis and documentation</li>
+                    <li>• Gap analysis and recommendations</li>
+                    <li>• Detailed report with actionable insights</li>
+                    <li>• Implementation roadmap and timeline</li>
+                  </ul>
+                </div>
+
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    onClick={() => handleStartAssessment(selectedAssessment)}
+                    className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Play className="h-4 w-4" />
+                    <span>Start Assessment</span>
+                  </button>
+                  <button
+                    onClick={() => setSelectedAssessment(null)}
+                    className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-400 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
