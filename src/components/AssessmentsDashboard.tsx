@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { 
   Shield, 
@@ -27,286 +27,61 @@ import {
   TrendingUp,
   Building,
   X,
-  ArrowLeft
+  ArrowLeft,
+  Loader2,
+  RefreshCw
 } from 'lucide-react';
+import { PortfolioAnalysisService, PACategoryWithAssessments, PAAssessment } from '../services/portfolioAnalysisService';
 
 const AssessmentsDashboard: React.FC = () => {
   const { user, isClient, isAdmin } = useAuth();
+  const [categories, setCategories] = useState<PACategoryWithAssessments[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedAssessment, setSelectedAssessment] = useState<any>(null);
+  const [selectedAssessment, setSelectedAssessment] = useState<PAAssessment | null>(null);
 
-  const assessmentCategories = [
-    {
-      id: 'strategy-enterprise-arch',
-      title: 'Strategy and Enterprise Architecture',
-      description: 'Enterprise architecture plays a key role in ensuring business outcomes from innovations and disruptions with risks mitigated',
-      icon: Building,
-      color: 'bg-blue-600',
-      assessments: [
-        {
-          id: 'business-capability-modeling',
-          name: 'Business Capability Modeling',
-          description: 'Assess and model business capabilities to align IT investments with business strategy',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'business-it-alignment',
-          name: 'Business and IT Strategy Alignment',
-          description: 'Evaluate alignment between business objectives and IT strategy',
-          duration: '1-2 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'digital-strategy',
-          name: 'Digital Strategy Assessment',
-          description: 'Comprehensive evaluation of digital transformation readiness and strategy',
-          duration: '3-4 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'fsa-gap-analysis',
-          name: 'FSA and Gap Analysis',
-          description: 'Future State Architecture planning with current state gap analysis',
-          duration: '2-3 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'ea-maturity',
-          name: 'EA Maturity Assessment',
-          description: 'Evaluate enterprise architecture maturity and governance capabilities',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        }
-      ]
-    },
-    {
-      id: 'digital-ecosystem',
-      title: 'Digital Ecosystem Readiness',
-      description: 'Every business is now evolving into social ecosystem using digital means and connectedness',
-      icon: Globe,
-      color: 'bg-green-600',
-      assessments: [
-        {
-          id: 'cloud-readiness',
-          name: 'Cloud Readiness Assessment',
-          description: 'Evaluate applications and infrastructure readiness for cloud migration',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'api-hybrid-integration',
-          name: 'APIs and Hybrid Integration',
-          description: 'Assess API strategy and hybrid integration capabilities',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'microservices-adoption',
-          name: 'Microservices Adoption',
-          description: 'Evaluate readiness for microservices architecture adoption',
-          duration: '2-3 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'mobile-omni-channel',
-          name: 'Mobile and Omni-Channel Readiness',
-          description: 'Assess mobile and omnichannel customer experience capabilities',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'analytics-readiness',
-          name: 'Analytics and Data Readiness',
-          description: 'Evaluate data analytics and business intelligence capabilities',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        }
-      ]
-    },
-    {
-      id: 'it-optimization',
-      title: 'IT Optimization and Consolidation',
-      description: 'Address technical debt and optimize IT operations to reduce support costs',
-      icon: Settings,
-      color: 'bg-purple-600',
-      assessments: [
-        {
-          id: 'application-portfolio-rationalization',
-          name: 'Applications Portfolio Rationalization',
-          description: 'Analyze and optimize application portfolio for efficiency and cost reduction',
-          duration: '3-4 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'solution-architecture',
-          name: 'Solution Architecture Assessment',
-          description: 'Evaluate solution architecture patterns and design principles',
-          duration: '2-3 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'enterprise-integration-soa',
-          name: 'Enterprise Integration and SOA',
-          description: 'Assess enterprise integration patterns and service-oriented architecture',
-          duration: '2-3 weeks',
-          complexity: 'High',
-          status: 'available'
-        }
-      ]
-    },
-    {
-      id: 'technology-architecture',
-      title: 'Technology Architecture',
-      description: 'Modernizing with new technology and platforms adoption is key to keep OPEX in control',
-      icon: Cpu,
-      color: 'bg-indigo-600',
-      assessments: [
-        {
-          id: 'infrastructure-rationalization',
-          name: 'Infrastructure Rationalization',
-          description: 'Optimize infrastructure components and reduce operational complexity',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'legacy-modernization',
-          name: 'Legacy Modernization Assessment',
-          description: 'Evaluate legacy systems and create modernization roadmap',
-          duration: '3-4 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'platform-architecture-upgrades',
-          name: 'Platform Architecture Upgrades',
-          description: 'Assess platform architecture and identify upgrade opportunities',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        }
-      ]
-    },
-    {
-      id: 'enterprise-governance',
-      title: 'Enterprise Architecture Governance',
-      description: 'Establish governance frameworks and processes for enterprise architecture',
-      icon: Shield,
-      color: 'bg-red-600',
-      assessments: [
-        {
-          id: 'ea-governance-framework',
-          name: 'EA Governance Framework',
-          description: 'Establish enterprise architecture governance processes and standards',
-          duration: '2-3 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'architecture-compliance',
-          name: 'Architecture Compliance Assessment',
-          description: 'Evaluate compliance with enterprise architecture standards',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'technology-standards',
-          name: 'Technology Standards Assessment',
-          description: 'Review and optimize technology standards and guidelines',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        }
-      ]
-    },
-    {
-      id: 'specialized-assessments',
-      title: 'Specialized Assessments',
-      description: 'Domain-specific assessments for comprehensive IT portfolio evaluation',
-      icon: Target,
-      color: 'bg-orange-600',
-      assessments: [
-        {
-          id: 'ai-readiness',
-          name: 'AI Readiness Assessment',
-          description: 'Evaluate organizational readiness for artificial intelligence adoption',
-          duration: '2-3 weeks',
-          complexity: 'High',
-          status: 'available'
-        },
-        {
-          id: 'application-modernity',
-          name: 'Application Modernity Assessment',
-          description: 'Assess application architecture and technology stack modernity',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'database-architecture',
-          name: 'Database Architecture Assessment',
-          description: 'Comprehensive evaluation of database architecture and performance',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'network-infrastructure',
-          name: 'Network/Infrastructure Assessment',
-          description: 'Assess network architecture and infrastructure capabilities',
-          duration: '2-3 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'devsecops',
-          name: 'DevSecOps Assessment',
-          description: 'Evaluate development, security, and operations integration maturity',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'scaled-agile',
-          name: 'Scaled Agile Assessment',
-          description: 'Assess agile transformation and scaled agile framework adoption',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'operational-support',
-          name: 'Operational Support Assessment',
-          description: 'Evaluate IT operations and support model effectiveness',
-          duration: '1-2 weeks',
-          complexity: 'Medium',
-          status: 'available'
-        },
-        {
-          id: 'target-operating-model',
-          name: 'Target Operating Model Assessment',
-          description: 'Design and assess target operating model for IT organization',
-          duration: '3-4 weeks',
-          complexity: 'High',
-          status: 'available'
-        }
-      ]
+  // Icon mapping for dynamic icon rendering
+  const iconMap: { [key: string]: React.ComponentType<any> } = {
+    Building,
+    Globe,
+    Settings,
+    Cpu,
+    Shield,
+    Target,
+    Database,
+    Server,
+    Cloud,
+    Network,
+    Zap,
+    Code,
+    Users,
+    Lock,
+    Smartphone,
+    GitBranch
+  };
+
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
+  const loadCategories = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await PortfolioAnalysisService.getCategoriesWithAssessments();
+      setCategories(data);
+    } catch (err) {
+      console.error('Error loading portfolio analysis data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load portfolio analysis data');
+    } finally {
+      setLoading(false);
     }
-  ];
+  };
+
+  const handleRefresh = () => {
+    loadCategories();
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -338,26 +113,74 @@ const AssessmentsDashboard: React.FC = () => {
     setSelectedCategory(categoryId);
   };
 
-  const handleAssessmentClick = (assessment: any) => {
+  const handleAssessmentClick = (assessment: PAAssessment) => {
     setSelectedAssessment(assessment);
   };
 
-  const handleStartAssessment = (assessment: any) => {
+  const handleStartAssessment = (assessment: PAAssessment) => {
     // TODO: Implement assessment start logic
     console.log('Starting assessment:', assessment.name);
     setSelectedAssessment(null);
     setSelectedCategory(null);
   };
 
-  const selectedCategoryData = assessmentCategories.find(cat => cat.id === selectedCategory);
+  const selectedCategoryData = categories.find(cat => cat.category_id === selectedCategory);
+
+  // Calculate total assessments
+  const totalAssessments = categories.reduce((total, cat) => total + cat.assessments.length, 0);
+  const availableAssessments = categories.reduce((total, cat) => 
+    total + cat.assessments.filter(a => a.status === 'available').length, 0
+  );
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+          <span className="ml-2 text-gray-600">Loading portfolio analysis...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center space-x-2">
+            <AlertTriangle className="h-5 w-5 text-red-500" />
+            <span className="text-red-800">{error}</span>
+            <button
+              onClick={handleRefresh}
+              className="ml-auto text-red-600 hover:text-red-800 transition-colors"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Portfolio Analysis</h1>
-        <p className="mt-2 text-gray-600">
-          Comprehensive assessment framework for enterprise architecture transformation and IT strategy implementation
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Portfolio Analysis</h1>
+            <p className="mt-2 text-gray-600">
+              Comprehensive assessment framework for enterprise architecture transformation and IT strategy implementation
+            </p>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Assessment Framework Overview */}
@@ -367,9 +190,13 @@ const AssessmentsDashboard: React.FC = () => {
           <h2 className="text-xl font-bold text-blue-900">Assessment Framework</h2>
         </div>
         <p className="text-blue-800 mb-4">
-          Our comprehensive assessment framework evaluates your IT portfolio across six key dimensions: 
-          Strategy & Enterprise Architecture, Digital Ecosystem Readiness, IT Optimization & Consolidation, 
-          Technology Architecture, Enterprise Architecture Governance, and Specialized Assessments.
+          Our comprehensive assessment framework evaluates your IT portfolio across {categories.length} key dimensions: 
+          {categories.map((cat, index) => (
+            <span key={cat.id}>
+              {index > 0 && (index === categories.length - 1 ? ', and ' : ', ')}
+              {cat.title}
+            </span>
+          ))}.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
           <div className="bg-white p-3 rounded-lg border border-blue-200">
@@ -389,18 +216,18 @@ const AssessmentsDashboard: React.FC = () => {
 
       {/* Assessment Categories Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {assessmentCategories.map((category) => {
-          const Icon = category.icon;
+        {categories.map((category) => {
+          const IconComponent = iconMap[category.icon] || Target;
           return (
             <div
               key={category.id}
               className="bg-white rounded-lg shadow-sm border border-gray-200 hover:shadow-lg hover:border-blue-300 transition-all duration-200 cursor-pointer group"
-              onClick={() => handleCategoryClick(category.id)}
+              onClick={() => handleCategoryClick(category.category_id)}
             >
               <div className="p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div className={`p-3 rounded-lg ${category.color} group-hover:scale-110 transition-transform duration-200`}>
-                    <Icon className="h-6 w-6 text-white" />
+                    <IconComponent className="h-6 w-6 text-white" />
                   </div>
                   <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
                 </div>
@@ -426,9 +253,7 @@ const AssessmentsDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Total Assessments</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {assessmentCategories.reduce((total, cat) => total + cat.assessments.length, 0)}
-              </p>
+              <p className="text-2xl font-bold text-gray-900">{totalAssessments}</p>
             </div>
             <FileText className="h-8 w-8 text-blue-600" />
           </div>
@@ -438,11 +263,7 @@ const AssessmentsDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Available</p>
-              <p className="text-2xl font-bold text-green-600">
-                {assessmentCategories.reduce((total, cat) => 
-                  total + cat.assessments.filter(a => a.status === 'available').length, 0
-                )}
-              </p>
+              <p className="text-2xl font-bold text-green-600">{availableAssessments}</p>
             </div>
             <CheckCircle className="h-8 w-8 text-green-600" />
           </div>
@@ -452,7 +273,7 @@ const AssessmentsDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Categories</p>
-              <p className="text-2xl font-bold text-purple-600">{assessmentCategories.length}</p>
+              <p className="text-2xl font-bold text-purple-600">{categories.length}</p>
             </div>
             <Layers className="h-8 w-8 text-purple-600" />
           </div>
@@ -521,7 +342,7 @@ const AssessmentsDashboard: React.FC = () => {
                     <ArrowLeft className="h-5 w-5 text-gray-600" />
                   </button>
                   <div className={`p-3 rounded-lg ${selectedCategoryData.color}`}>
-                    <selectedCategoryData.icon className="h-6 w-6 text-white" />
+                    {React.createElement(iconMap[selectedCategoryData.icon] || Target, { className: "h-6 w-6 text-white" })}
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{selectedCategoryData.title}</h2>
