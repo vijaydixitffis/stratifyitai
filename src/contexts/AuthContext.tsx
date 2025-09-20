@@ -60,15 +60,19 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     // Listen for auth changes if Supabase is configured
     if (isSupabaseConfigured() && supabase) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
-        async (event, session) => {
+        (event, session) => {
           console.log('Auth state change:', event, session?.user?.id);
-          if (session?.user) {
-            // Try to load from both admin and client tables
-            await loadUserProfile(session.user.id);
+          if (event === 'SIGNED_IN' && session?.user) {
+            // Load user profile asynchronously without blocking
+            loadUserProfile(session.user.id).catch(error => {
+              console.error('Failed to load user profile:', error);
+              setUser(null);
+              setLoading(false);
+            });
           } else {
             setUser(null);
+            setLoading(false);
           }
-          setLoading(false);
         }
       );
 
@@ -82,12 +86,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('Loading user profile for:', userId);
       
+      // Set a reasonable timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Profile loading timeout')), 3000);
+      });
+      
       // First try to find user in admin_users table
-      const { data: adminProfile, error: adminError } = await supabase!
+      const adminProfilePromise = supabase!
         .from('admin_users')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
+      
+      const { data: adminProfile, error: adminError } = await Promise.race([
+        adminProfilePromise,
+        timeoutPromise
+      ]) as any;
 
       if (adminProfile) {
         // User is an admin
@@ -105,11 +119,16 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // If not found in admin_users, try client_users
-      const { data: clientProfile, error: clientError } = await supabase!
+      const clientProfilePromise = supabase!
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
         .maybeSingle();
+      
+      const { data: clientProfile, error: clientError } = await Promise.race([
+        clientProfilePromise,
+        timeoutPromise
+      ]) as any;
 
       if (clientProfile) {
         // User is a client
@@ -129,25 +148,29 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // If user not found in either table
       console.error('User profile not found in admin_users or client_users tables');
-      // Don't throw error immediately, user might be newly created
-      console.log('User profile not found, this might be a newly created user');
+      setUser(null);
+      throw new Error('User profile not found');
 
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      // Don't throw error, just log it
-      console.log('Will retry loading user profile...');
+      setUser(null);
+      throw error;
     }
   };
 
   const checkUser = async () => {
+    setLoading(true);
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
           await loadUserProfile(session.user.id);
+        } else {
+          setUser(null);
         }
       } catch (error) {
         console.error('Error checking user session:', error);
+        setUser(null);
       }
     }
     setLoading(false);
