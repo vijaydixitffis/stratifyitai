@@ -62,13 +62,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           console.log('Auth state change:', event, session?.user?.id);
-          if (session?.user) {
-            // Try to load from both admin and client tables
-            await loadUserProfile(session.user.id);
-          } else {
+          if (event === 'SIGNED_OUT' || !session?.user) {
             setUser(null);
+            setLoading(false);
+          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            // Only load profile for sign in or token refresh events
+            await loadUserProfile(session.user.id);
           }
-          setLoading(false);
         }
       );
 
@@ -79,8 +79,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const loadUserProfile = async (userId: string) => {
+    // Set a shorter timeout and add better error handling
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Profile loading timeout after 10 seconds')), 10000);
+      setTimeout(() => reject(new Error('Profile loading timeout after 5 seconds')), 5000);
     });
 
     try {
@@ -113,6 +114,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           orgCode: 'ADMIN'
         };
         setUser(appUser);
+        setLoading(false);
         console.log('Admin user profile loaded successfully:', appUser.name);
         return;
       }
@@ -145,6 +147,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           org_id: clientProfile.org_id
         };
         setUser(appUser);
+        setLoading(false);
         console.log('Client user profile loaded successfully:', appUser.name);
         return;
       }
@@ -157,6 +160,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       // Set user to null if profile not found
       console.log('User profile not found, signing out...');
       setUser(null);
+      setLoading(false);
       if (supabase) {
         await supabase.auth.signOut();
       }
@@ -165,16 +169,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Error in loadUserProfile:', error);
       
       if (error instanceof Error && error.message.includes('timeout')) {
-        console.error('Profile loading timed out - this may indicate RLS policy issues');
+        console.error('Profile loading timed out - falling back to sign out');
       }
       
       setUser(null);
+      setLoading(false);
       if (supabase) {
         await supabase.auth.signOut();
       }
-    } finally {
-      console.log('Profile loading completed, setting loading to false');
-      setLoading(false);
     }
   };
 
