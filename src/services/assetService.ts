@@ -107,25 +107,72 @@ export class AssetService {
 
     try {
       console.log('Fetching assets from Supabase...');
-      let query = supabase!
-        .from('it_assets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (org_id) {
-        query = query.eq('org_id', org_id);
-      }
-      const { data, error } = await query;
 
-      if (error) {
-        console.error('Supabase error fetching assets:', error);
-        throw new Error(`Failed to fetch assets: ${error.message}`);
+      // Check if user is admin first
+      const { data: { session } } = await supabase!.auth.getSession();
+      const isAdmin = session?.user ? await this.isUserAdmin(session.user.id) : false;
+
+      if (isAdmin) {
+        console.log('Admin user detected, fetching all assets...');
+        // Admin users get all assets
+        const { data, error } = await supabase!
+          .from('it_assets')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error fetching assets for admin:', error);
+          throw new Error(`Failed to fetch assets: ${error.message}`);
+        }
+
+        console.log('Successfully fetched assets for admin:', data?.length || 0);
+        return data ? data.map(this.transformAssetFromDB) : [];
+      } else {
+        // Client users with org filtering
+        let query = supabase!
+          .from('it_assets')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (org_id) {
+          query = query.eq('org_id', org_id);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+          console.error('Error fetching assets for client:', error);
+          throw new Error(`Failed to fetch assets: ${error.message}`);
+        }
+
+        console.log('Successfully fetched assets for client:', data?.length || 0);
+        return data ? data.map(this.transformAssetFromDB) : [];
       }
 
-      console.log('Successfully fetched assets from Supabase:', data?.length || 0);
-      return data ? data.map(this.transformAssetFromDB) : [];
     } catch (error) {
       console.error('Error in getAssets:', error);
       throw error;
+    }
+  }
+
+  // Helper method to check if user is admin
+  private static async isUserAdmin(userId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabase!
+        .from('admin_users')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error checking admin status:', error);
+        return false;
+      }
+
+      return !!data;
+    } catch (error) {
+      console.error('Error in isUserAdmin:', error);
+      return false;
     }
   }
 
@@ -229,7 +276,7 @@ export class AssetService {
     if (!this.isSupabaseAvailable()) {
       // Mock implementation
       let filtered = [...mockAssetStore];
-      
+
       if (query) {
         const lowerQuery = query.toLowerCase();
         filtered = filtered.filter(asset =>
@@ -238,42 +285,74 @@ export class AssetService {
           asset.owner.toLowerCase().includes(lowerQuery)
         );
       }
-      
+
       if (type && type !== 'all') {
         filtered = filtered.filter(asset => asset.type === type);
       }
       if (org_id) {
         filtered = filtered.filter(asset => asset.org_id === org_id);
       }
-      
+
       return Promise.resolve(filtered);
     }
 
     try {
-      let queryBuilder = supabase!
-        .from('it_assets')
-        .select('*');
+      // Check if user is admin first
+      const { data: { session } } = await supabase!.auth.getSession();
+      const isAdmin = session?.user ? await this.isUserAdmin(session.user.id) : false;
 
-      if (query) {
-        queryBuilder = queryBuilder.or(`name.ilike.%${query}%,description.ilike.%${query}%,owner.ilike.%${query}%`);
+      if (isAdmin) {
+        console.log('Admin user searching assets...');
+        // Admin users can search all assets
+        let queryBuilder = supabase!
+          .from('it_assets')
+          .select('*');
+
+        if (query) {
+          queryBuilder = queryBuilder.or(`name.ilike.%${query}%,description.ilike.%${query}%,owner.ilike.%${query}%`);
+        }
+
+        if (type && type !== 'all') {
+          queryBuilder = queryBuilder.eq('type', type);
+        }
+
+        const { data, error } = await queryBuilder
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error searching assets for admin:', error);
+          throw new Error(`Failed to search assets: ${error.message}`);
+        }
+
+        return data ? data.map(this.transformAssetFromDB) : [];
+      } else {
+        // Client users with org filtering
+        let queryBuilder = supabase!
+          .from('it_assets')
+          .select('*');
+
+        if (query) {
+          queryBuilder = queryBuilder.or(`name.ilike.%${query}%,description.ilike.%${query}%,owner.ilike.%${query}%`);
+        }
+
+        if (type && type !== 'all') {
+          queryBuilder = queryBuilder.eq('type', type);
+        }
+        if (org_id) {
+          queryBuilder = queryBuilder.eq('org_id', org_id);
+        }
+
+        const { data, error } = await queryBuilder
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('Error searching assets for client:', error);
+          throw new Error(`Failed to search assets: ${error.message}`);
+        }
+
+        return data ? data.map(this.transformAssetFromDB) : [];
       }
 
-      if (type && type !== 'all') {
-        queryBuilder = queryBuilder.eq('type', type);
-      }
-      if (org_id) {
-        queryBuilder = queryBuilder.eq('org_id', org_id);
-      }
-
-      const { data, error } = await queryBuilder
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error searching assets:', error);
-        throw new Error(`Failed to search assets: ${error.message}`);
-      }
-
-      return data ? data.map(this.transformAssetFromDB) : [];
     } catch (error) {
       console.error('Error in searchAssets:', error);
       throw error;

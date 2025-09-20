@@ -2,7 +2,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
+  role: 'admin' | 'client-manager' | 'client-architect' | 'client-cxo';
   organization: string;
   orgCode?: string;
   org_id?: number;

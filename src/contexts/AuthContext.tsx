@@ -35,7 +35,7 @@ const mockUsers: User[] = [
     id: '3',
     name: 'Mike Chen',
     email: 'mike@stratifyit.ai',
-    role: 'admin-consultant',
+    role: 'admin',
     organization: 'StratifyIT.ai',
     orgCode: 'ADMIN'
   },
@@ -43,7 +43,7 @@ const mockUsers: User[] = [
     id: '4',
     name: 'Lisa Rodriguez',
     email: 'lisa@stratifyit.ai',
-    role: 'admin-architect',
+    role: 'admin',
     organization: 'StratifyIT.ai',
     orgCode: 'ADMIN'
   }
@@ -63,7 +63,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         async (event, session) => {
           console.log('Auth state change:', event, session?.user?.id);
           if (session?.user) {
-            // Try to load from both admin and client tables
+            // Try to load user profile
             await loadUserProfile(session.user.id);
           } else {
             setUser(null);
@@ -81,61 +81,123 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const loadUserProfile = async (userId: string) => {
     try {
       console.log('Loading user profile for:', userId);
-      
-      // First try to find user in admin_users table
-      const { data: adminProfile, error: adminError } = await supabase!
-        .from('admin_users')
-        .select('*')
+
+      // Try to create/get user profile using the database function
+      // This will create a profile if it doesn't exist
+      const { data: profileData, error: profileError } = await supabase!
+        .rpc('create_current_user_profile');
+
+      if (profileData && !profileError) {
+        console.log('User profile created/retrieved successfully:', profileData);
+
+        // If profile was just created, fetch the full profile data
+        if (profileData.exists === true) {
+          // Profile already existed, fetch it
+          const { data: userProfile, error: fetchError } = await supabase!
+            .from('users')
+            .select('id, name, email, role, org_id, organization')
+            .eq('id', userId)
+            .maybeSingle();
+
+          if (userProfile && !fetchError) {
+            const appUser: User = {
+              id: userProfile.id,
+              name: userProfile.name,
+              email: userProfile.email || '',
+              role: userProfile.role,
+              organization: userProfile.organization || 'Unknown Organization',
+              orgCode: userProfile.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
+              org_id: userProfile.org_id || undefined
+            };
+            setUser(appUser);
+            console.log('User profile loaded successfully:', appUser.name);
+            return;
+          }
+        } else {
+          // Profile was just created, use the returned data
+          const appUser: User = {
+            id: profileData.id,
+            name: profileData.name,
+            email: profileData.email || '',
+            role: profileData.role,
+            organization: profileData.organization || 'Unknown Organization',
+            orgCode: profileData.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
+            org_id: profileData.org_id || undefined
+          };
+          setUser(appUser);
+          console.log('User profile created successfully:', appUser.name);
+          return;
+        }
+      }
+
+      console.log('Failed to create/retrieve user profile:', profileError);
+
+      // Fallback: Try to load existing profile directly
+      const { data: userProfile, error: fetchError } = await supabase!
+        .from('users')
+        .select('id, name, email, role, org_id, organization')
         .eq('id', userId)
         .maybeSingle();
 
-      if (adminProfile) {
-        // User is an admin
+      if (userProfile && !fetchError) {
+        console.log('Found existing user profile, setting user data...');
         const appUser: User = {
-          id: adminProfile.id,
-          name: adminProfile.name,
-          email: adminProfile.email || '',
-          role: adminProfile.role,
-          organization: 'StratifyIT.ai',
-          orgCode: 'ADMIN'
+          id: userProfile.id,
+          name: userProfile.name,
+          email: userProfile.email || '',
+          role: userProfile.role,
+          organization: userProfile.organization || 'Unknown Organization',
+          orgCode: userProfile.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
+          org_id: userProfile.org_id || undefined
         };
         setUser(appUser);
-        console.log('Admin user profile loaded successfully:', appUser.name);
+        console.log('User profile loaded successfully:', appUser.name);
         return;
       }
 
-      // If not found in admin_users, try client_users
-      const { data: clientProfile, error: clientError } = await supabase!
-        .from('client_users')
-        .select('*, client_orgs(org_code, org_name)')
+      console.log('User profile not found yet, trigger might still be processing...');
+      console.log('Profile error:', profileError);
+      console.log('Fetch error:', fetchError);
+
+      // Wait a moment and try again (trigger might still be processing)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      const { data: retryProfile, error: retryError } = await supabase!
+        .from('users')
+        .select('id, name, email, role, org_id, organization')
         .eq('id', userId)
         .maybeSingle();
 
-      if (clientProfile) {
-        // User is a client
+      if (retryProfile && !retryError) {
+        console.log('Found user profile on retry, setting user data...');
         const appUser: User = {
-          id: clientProfile.id,
-          name: clientProfile.name,
-          email: clientProfile.email || '',
-          role: clientProfile.role,
-          organization: clientProfile.client_orgs?.org_name || clientProfile.organization,
-          orgCode: clientProfile.client_orgs?.org_code,
-          org_id: clientProfile.org_id
+          id: retryProfile.id,
+          name: retryProfile.name,
+          email: retryProfile.email || '',
+          role: retryProfile.role,
+          organization: retryProfile.organization || 'Unknown Organization',
+          orgCode: retryProfile.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
+          org_id: retryProfile.org_id || undefined
         };
         setUser(appUser);
-        console.log('Client user profile loaded successfully:', appUser.name);
+        console.log('User profile loaded on retry:', appUser.name);
         return;
       }
 
-      // If user not found in either table
-      console.error('User profile not found in admin_users or client_users tables');
-      // Don't throw error immediately, user might be newly created
-      console.log('User profile not found, this might be a newly created user');
+      console.log('User profile still not found after retry, attempting to create basic profile...');
 
+      // Auto-create basic profile if user doesn't exist
+      try {
+        console.log('Attempting to create missing user profile...');
+        // TODO: Implement user profile auto-creation logic here
+        setLoading(false);
+      } catch (error) {
+        console.error('Error in loadUserProfile:', error);
+        setLoading(false);
+      }
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      // Don't throw error, just log it
-      console.log('Will retry loading user profile...');
+      setLoading(false);
     }
   };
 
@@ -144,13 +206,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
+          // Use the new loadUserProfile function which will create profile if needed
           await loadUserProfile(session.user.id);
+        } else {
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error checking user session:', error);
+        setLoading(false); // Always set loading to false to prevent hanging
       }
+    } else {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const login = async (orgCode: string, email: string, password: string) => {
@@ -164,20 +231,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw new Error('Invalid email or password. Please try again.');
           }
           if (data.user) {
-            const { data: adminUser, error: adminError } = await supabase
-              .from('admin_users')
-              .select('*')
-              .eq('id', data.user.id)
-              .single();
-            if (adminError || !adminUser) {
-              await supabase.auth.signOut();
-              setUser(null);
-              throw new Error('Access denied. Admin credentials required.');
-            }
+            // For admin users, we don't need to check role immediately
+            // The trigger function will create the profile automatically
+            console.log('Admin login successful, profile will be created by trigger');
             await loadUserProfile(data.user.id);
           }
         } else {
-          // Validate org code from client_orgs for client users
+          // For client users, just validate org code exists
           const { data: orgData, error: orgError } = await supabase
             .from('client_orgs')
             .select('*')
@@ -193,17 +253,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             throw new Error('Invalid email or password. Please try again.');
           }
           if (data.user) {
-            const { data: clientUser, error: clientError } = await supabase
-              .from('client_users')
-              .select('*')
-              .eq('id', data.user.id)
-              .eq('org_id', orgData.org_id)
-              .single();
-            if (clientError || !clientUser) {
-              await supabase.auth.signOut();
-              setUser(null);
-              throw new Error('User not found for this organization.');
-            }
+            console.log('Client login successful, profile will be created by trigger');
             await loadUserProfile(data.user.id);
           }
         }

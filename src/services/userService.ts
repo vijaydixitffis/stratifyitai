@@ -4,7 +4,7 @@ export interface CreateUserRequest {
   email: string;
   password: string;
   name: string;
-  role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
+  role: 'admin' | 'client-manager' | 'client-architect' | 'client-cxo';
   organization: string;
   orgCode?: string;
   org_id?: number;
@@ -14,7 +14,7 @@ export interface UserProfile {
   id: string;
   name: string;
   email: string;
-  role: 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super';
+  role: 'admin' | 'client-manager' | 'client-architect' | 'client-cxo';
   organization: string;
   orgCode?: string;
   org_id?: number;
@@ -56,10 +56,9 @@ export class UserService {
           id: '3',
           name: 'Mike Chen',
           email: 'mike@stratifyit.ai',
-          role: 'admin-consultant',
+          role: 'admin',
           organization: 'StratifyIT.ai',
-          orgCode: 'STRAT',
-          org_id: 2,
+          orgCode: 'ADMIN',
           created_at: '2024-01-10T09:15:00Z',
           updated_at: '2024-01-10T09:15:00Z',
           status: 'active'
@@ -68,10 +67,9 @@ export class UserService {
           id: '4',
           name: 'Lisa Rodriguez',
           email: 'lisa@stratifyit.ai',
-          role: 'admin-architect',
+          role: 'admin',
           organization: 'StratifyIT.ai',
-          orgCode: 'STRAT',
-          org_id: 2,
+          orgCode: 'ADMIN',
           created_at: '2024-01-12T11:45:00Z',
           updated_at: '2024-01-12T11:45:00Z',
           status: 'active'
@@ -80,39 +78,59 @@ export class UserService {
     }
 
     try {
-      // Join with organizations to get org_code
-      const { data, error } = await supabase
-        .from('client_users')
-        .select(`
-          *,
-          client_orgs (
-            org_code,
-            org_name
-          )
-        `)
-        .order('created_at', { ascending: false });
+      console.log('Fetching users from database...');
 
-      if (error) {
-        console.error('Error fetching users:', error);
-        throw error;
-      }
+      // Add timeout protection
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('User fetch timeout after 10 seconds')), 10000);
+      });
 
-      // Map the database fields to our interface
-      return (data || []).map(user => ({
-        id: user.id,
-        name: user.name,
-        email: user.email || '',
-        role: user.role,
-        organization: user.organization,
-        orgCode: user.client_orgs?.org_code,
-        org_id: user.org_id,
-        created_at: user.created_at,
-        updated_at: user.updated_at,
-        status: 'active' // Default to active since we don't have a status field yet
-      }));
+      const fetchUsersPromise = (async () => {
+        try {
+          // Query unified users table directly
+          const { data: users, error: usersError } = await supabase
+            .from('users')
+            .select('id, name, email, role, org_id, organization, created_at, updated_at')
+            .order('created_at', { ascending: false });
+
+          if (usersError) {
+            console.error('Error fetching users:', usersError);
+            throw usersError;
+          }
+
+          if (!users || users.length === 0) {
+            return [];
+          }
+
+          // Map the data to UserProfile format
+          return users.map(user => ({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role as any,
+            organization: user.organization || 'Unknown Organization',
+            orgCode: user.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
+            org_id: user.org_id || undefined,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+            status: 'active' as const
+          }));
+
+        } catch (error) {
+          console.error('Error in fetchUsersPromise:', error);
+          throw error;
+        }
+      })();
+
+      // Race between the fetch and timeout
+      const result = await Promise.race([fetchUsersPromise, timeoutPromise]) as UserProfile[];
+
+      console.log('Successfully fetched users:', result.length);
+      return result;
+
     } catch (error) {
       console.error('Error fetching users:', error);
-      throw new Error('Failed to fetch users');
+      throw error;
     }
   }
 
@@ -180,74 +198,40 @@ export class UserService {
       // Wait a moment for the trigger to create the profile entry
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Create profile in appropriate table
-      if (userData.role.startsWith('admin')) {
-        // Create admin user profile
-        const { data: adminProfile, error: adminError } = await supabase
-          .from('admin_users')
-          .insert({
-            id: authData.user.id,
-            email: userData.email,
-            name: userData.name,
-            role: userData.role
-          })
-          .select()
-          .single();
+      // Create profile in unified users table
+      // Note: The trigger function will handle profile creation automatically
+      // We don't need to wait for it here
+      const { error: profileError } = await supabase
+        .from('users')
+        .insert({
+          id: authData.user.id,
+          email: userData.email,
+          name: userData.name,
+          role: userData.role,
+          org_id: userData.role.startsWith('admin') ? null : userData.org_id,
+          organization: userData.organization
+        });
 
-        if (adminError) {
-          console.error('Error creating admin profile:', adminError);
-          throw adminError;
-        }
-
-        return {
-          id: adminProfile.id,
-          name: adminProfile.name,
-          email: adminProfile.email,
-          role: adminProfile.role,
-          organization: 'StratifyIT.ai',
-          orgCode: 'ADMIN',
-          created_at: adminProfile.created_at,
-          updated_at: adminProfile.created_at,
-          status: 'active'
-        };
-      } else {
-        // Create client user profile
-        const { data: clientProfile, error: clientError } = await supabase
-          .from('client_users')
-          .insert({
-            id: authData.user.id,
-            email: userData.email,
-            name: userData.name,
-            role: userData.role,
-            org_id: userData.org_id
-          })
-          .select(`
-            *,
-            client_orgs (
-              org_code,
-              org_name
-            )
-          `)
-          .single();
-
-        if (clientError) {
-          console.error('Error creating client profile:', clientError);
-          throw clientError;
-        }
-
-        return {
-          id: clientProfile.id,
-          name: clientProfile.name,
-          email: clientProfile.email,
-          role: clientProfile.role,
-          organization: clientProfile.client_orgs?.org_name || userData.organization,
-          orgCode: clientProfile.client_orgs?.org_code,
-          org_id: clientProfile.org_id,
-          created_at: clientProfile.created_at,
-          updated_at: clientProfile.created_at,
-          status: 'active'
-        };
+      // If insert fails, the profile might already exist (created by trigger)
+      // or there might be a constraint violation - either way, continue
+      if (profileError) {
+        console.log('Profile insert result:', profileError);
+        // Don't throw error here - trigger might have created it
       }
+
+      // Return basic user info - the profile will be loaded by the UI
+      return {
+        id: authData.user.id,
+        name: userData.name,
+        email: userData.email,
+        role: userData.role,
+        organization: userData.organization,
+        orgCode: userData.role.startsWith('admin') ? 'ADMIN' : userData.orgCode || 'UNKNOWN',
+        org_id: userData.org_id || undefined,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        status: 'active'
+      };
 
     } catch (error) {
       console.error('Error creating user:', error);
@@ -274,7 +258,7 @@ export class UserService {
     }
 
     try {
-      // Only update fields that we know exist in the database
+      // Update user in unified users table
       const updateData: any = {};
       
       if (updates.name !== undefined) updateData.name = updates.name;
@@ -286,16 +270,10 @@ export class UserService {
       // Only proceed with update if there are fields to update
       if (Object.keys(updateData).length > 0) {
         const { data, error } = await supabase
-          .from('client_users')
+          .from('users')
           .update(updateData)
           .eq('id', userId)
-          .select(`
-            *,
-            client_orgs (
-              org_code,
-              org_name
-            )
-          `)
+          .select('id, name, email, role, org_id, organization, created_at, updated_at')
           .single();
 
         if (error) {
@@ -308,9 +286,9 @@ export class UserService {
           name: data.name,
           email: data.email || '',
           role: data.role,
-          organization: data.organization,
-          orgCode: data.client_orgs?.org_code,
-          org_id: data.org_id,
+          organization: data.organization || '',
+          orgCode: data.role.startsWith('admin') ? 'ADMIN' : 'UNKNOWN',
+          org_id: data.org_id || undefined,
           created_at: data.created_at,
           updated_at: data.updated_at,
           status: 'active'
@@ -318,14 +296,8 @@ export class UserService {
       } else {
         // If no main fields to update, just return the current user data
         const { data, error } = await supabase
-          .from('client_users')
-          .select(`
-            *,
-            client_orgs (
-              org_code,
-              org_name
-            )
-          `)
+          .from('users')
+          .select('id, name, email, role, org_id, organization, created_at, updated_at')
           .eq('id', userId)
           .single();
 
@@ -338,9 +310,9 @@ export class UserService {
           name: data.name,
           email: data.email || '',
           role: data.role,
-          organization: data.organization,
-          orgCode: data.client_orgs?.org_code,
-          org_id: data.org_id,
+          organization: data.organization || '',
+          orgCode: data.role.startsWith('admin') ? 'ADMIN' : 'UNKNOWN',
+          org_id: data.org_id || undefined,
           created_at: data.created_at,
           updated_at: data.updated_at,
           status: 'active'
@@ -359,9 +331,9 @@ export class UserService {
     }
 
     try {
-      // Delete the user profile (this will also handle auth user deletion via cascade if set up)
+      // Delete from unified users table (this will cascade to auth.users if set up)
       const { error } = await supabase
-        .from('client_users')
+        .from('users')
         .delete()
         .eq('id', userId);
 

@@ -59,8 +59,9 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // Helper to get effective org_id
   const getOrgId = () => {
-    if (user?.role?.startsWith('admin') && user.orgCode === 'ADMIN' && selectedOrg) {
-      return selectedOrg.org_id;
+    // Admin users should have access to all assets, don't filter by org_id
+    if (user?.role?.startsWith('admin') && user.orgCode === 'ADMIN') {
+      return undefined; // No org_id filtering for admins
     }
     return user?.org_id;
   };

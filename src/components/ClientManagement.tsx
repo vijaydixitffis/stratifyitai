@@ -51,7 +51,7 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
   const [formData, setFormData] = useState({
     name: '',
     email: '',
-    role: 'client-manager' as 'client-manager' | 'client-architect' | 'client-cxo' | 'admin-consultant' | 'admin-architect' | 'admin-super',
+    role: 'client-manager' as 'client-manager' | 'client-architect' | 'client-cxo' | 'admin',
     organization: '',
     password: ''
   });
@@ -81,16 +81,14 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ showOnboardOrgForm,
     { value: 'client-cxo', label: 'Client CXO', description: 'Executive level client contact' },
     { value: 'client-architect', label: 'Client Architect', description: 'Technical architect for client solutions' },
     { value: 'client-manager', label: 'Client Manager', description: 'Manages client projects and communications' },
-    { value: 'admin-consultant', label: 'Admin Consultant', description: 'Internal consultant with admin access' },
-    { value: 'admin-architect', label: 'Admin Architect', description: 'Technical architect with admin access' },
-    { value: 'admin-super', label: 'Super Admin', description: 'Full system administration access' }
+    { value: 'admin', label: 'Admin', description: 'Full system administration access' }
   ];
 
   // Check if current user is Super Admin
-  const isSuperAdmin = user?.role === 'admin-super';
+  const isSuperAdmin = user?.role === 'admin';
 
   // Only allow access if logged-in user is ADMIN org admin
-  const canAccessClientManagement = user?.orgCode === 'ADMIN' && user?.role?.startsWith('admin-');
+  const canAccessClientManagement = user?.orgCode === 'ADMIN' && user?.role === 'admin';
 
   useEffect(() => {
     if (isSuperAdmin) {
