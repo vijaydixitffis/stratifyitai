@@ -1,4 +1,4 @@
-@@ .. @@
+
  -- 2. client_users
  ALTER TABLE public.client_users ENABLE ROW LEVEL SECURITY;
  DROP POLICY IF EXISTS admin_full_access_client_users ON public.client_users;
