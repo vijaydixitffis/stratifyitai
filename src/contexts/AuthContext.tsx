@@ -83,11 +83,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.log('Loading user profile for:', userId);
       
       // First try to find user in admin_users table
+      console.log('Checking admin_users table...');
       const { data: adminProfile, error: adminError } = await supabase!
         .from('admin_users')
         .select('*')
         .eq('id', userId)
         .single();
+
+      console.log('Admin query result:', { adminProfile, adminError });
 
       if (!adminError && adminProfile) {
         // User is an admin
@@ -105,11 +108,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // If not found in admin_users, try client_users
+      console.log('Checking client_users table...');
       const { data: clientProfile, error: clientError } = await supabase!
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
         .single();
+
+      console.log('Client query result:', { clientProfile, clientError });
 
       if (!clientError && clientProfile) {
         // User is a client
@@ -133,28 +139,41 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Client error:', clientError);
       
       // Set user to null if profile not found
+      console.log('Signing out user due to missing profile...');
       setUser(null);
       await supabase!.auth.signOut();
 
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
+      console.log('Signing out user due to error...');
       setUser(null);
       await supabase!.auth.signOut();
+    } finally {
+      console.log('Profile loading completed, setting loading to false');
+      setLoading(false);
     }
   };
 
   const checkUser = async () => {
+    console.log('Checking user session...');
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
+        console.log('Session check result:', session?.user?.id || 'No session');
         if (session?.user) {
           await loadUserProfile(session.user.id);
+        } else {
+          console.log('No active session found');
+          setLoading(false);
         }
       } catch (error) {
         console.error('Error checking user session:', error);
+        setLoading(false);
       }
+    } else {
+      console.log('Supabase not configured, using mock mode');
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const login = async (orgCode: string, email: string, password: string) => {
