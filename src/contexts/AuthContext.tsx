@@ -79,20 +79,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const loadUserProfile = async (userId: string) => {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Profile loading timeout after 10 seconds')), 10000);
+    });
+
     try {
       console.log('Loading user profile for:', userId);
       
       // First try to find user in admin_users table
       console.log('Checking admin_users table...');
-      const { data: adminProfile, error: adminError } = await supabase!
+      
+      const adminQueryPromise = supabase!
         .from('admin_users')
         .select('*')
         .eq('id', userId)
         .single();
+      
+      const { data: adminProfile, error: adminError } = await Promise.race([
+        adminQueryPromise,
+        timeoutPromise
+      ]) as any;
 
       console.log('Admin query result:', { adminProfile, adminError });
 
-      if (!adminError && adminProfile) {
+      if (adminProfile && !adminError) {
         // User is an admin
         const appUser: User = {
           id: adminProfile.id,
@@ -109,15 +119,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
       // If not found in admin_users, try client_users
       console.log('Checking client_users table...');
-      const { data: clientProfile, error: clientError } = await supabase!
+      
+      const clientQueryPromise = supabase!
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
         .single();
+      
+      const { data: clientProfile, error: clientError } = await Promise.race([
+        clientQueryPromise,
+        timeoutPromise
+      ]) as any;
 
       console.log('Client query result:', { clientProfile, clientError });
 
-      if (!clientError && clientProfile) {
+      if (clientProfile && !clientError) {
         // User is a client
         const appUser: User = {
           id: clientProfile.id,
@@ -139,15 +155,23 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error('Client error:', clientError);
       
       // Set user to null if profile not found
-      console.log('Signing out user due to missing profile...');
+      console.log('User profile not found, signing out...');
       setUser(null);
-      await supabase!.auth.signOut();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
 
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      console.log('Signing out user due to error...');
+      
+      if (error instanceof Error && error.message.includes('timeout')) {
+        console.error('Profile loading timed out - this may indicate RLS policy issues');
+      }
+      
       setUser(null);
-      await supabase!.auth.signOut();
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
     } finally {
       console.log('Profile loading completed, setting loading to false');
       setLoading(false);
