@@ -87,9 +87,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .from('admin_users')
         .select('*')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
 
-      if (adminProfile) {
+      if (!adminError && adminProfile) {
         // User is an admin
         const appUser: User = {
           id: adminProfile.id,
@@ -109,9 +109,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
-        .maybeSingle();
+        .single();
 
-      if (clientProfile) {
+      if (!clientError && clientProfile) {
         // User is a client
         const appUser: User = {
           id: clientProfile.id,
@@ -128,14 +128,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       }
 
       // If user not found in either table
-      console.error('User profile not found in admin_users or client_users tables');
-      // Don't throw error immediately, user might be newly created
-      console.log('User profile not found, this might be a newly created user');
+      console.error('User profile not found in admin_users or client_users tables for user:', userId);
+      console.error('Admin error:', adminError);
+      console.error('Client error:', clientError);
+      
+      // Set user to null if profile not found
+      setUser(null);
+      await supabase!.auth.signOut();
 
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      // Don't throw error, just log it
-      console.log('Will retry loading user profile...');
+      setUser(null);
+      await supabase!.auth.signOut();
     }
   };
 
