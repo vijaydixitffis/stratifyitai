@@ -32,7 +32,9 @@ import {
   RefreshCw,
   Briefcase,
   Activity,
-  Cog
+  Cog,
+  Lightbulb,
+  Workflow
 } from 'lucide-react';
 import { PortfolioAnalysisService, PACategoryWithAssessments, PAAssessment } from '../services/portfolioAnalysisService';
 
@@ -64,7 +66,9 @@ const AssessmentsDashboard: React.FC = () => {
     GitBranch,
     Briefcase,
     Activity,
-    Cog
+    Cog,
+    Lightbulb,
+    Workflow
   };
 
   useEffect(() => {
