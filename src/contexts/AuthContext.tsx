@@ -62,13 +62,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           console.log('Auth state change:', event, session?.user?.id);
-          if (event === 'SIGNED_OUT' || !session?.user) {
-            setUser(null);
-            setLoading(false);
-          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            // Only load profile for sign in or token refresh events
+          if (session?.user) {
+            // Try to load from both admin and client tables
             await loadUserProfile(session.user.id);
+          } else {
+            setUser(null);
           }
+          setLoading(false);
         }
       );
 
@@ -79,31 +79,17 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, []);
 
   const loadUserProfile = async (userId: string) => {
-    // Set a shorter timeout and add better error handling
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Profile loading timeout after 5 seconds')), 5000);
-    });
-
     try {
       console.log('Loading user profile for:', userId);
       
       // First try to find user in admin_users table
-      console.log('Checking admin_users table...');
-      
-      const adminQueryPromise = supabase!
+      const { data: adminProfile, error: adminError } = await supabase!
         .from('admin_users')
         .select('*')
         .eq('id', userId)
-        .single();
-      
-      const { data: adminProfile, error: adminError } = await Promise.race([
-        adminQueryPromise,
-        timeoutPromise
-      ]) as any;
+        .maybeSingle();
 
-      console.log('Admin query result:', { adminProfile, adminError });
-
-      if (adminProfile && !adminError) {
+      if (adminProfile) {
         // User is an admin
         const appUser: User = {
           id: adminProfile.id,
@@ -114,28 +100,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           orgCode: 'ADMIN'
         };
         setUser(appUser);
-        setLoading(false);
         console.log('Admin user profile loaded successfully:', appUser.name);
         return;
       }
 
       // If not found in admin_users, try client_users
-      console.log('Checking client_users table...');
-      
-      const clientQueryPromise = supabase!
+      const { data: clientProfile, error: clientError } = await supabase!
         .from('client_users')
         .select('*, client_orgs(org_code, org_name)')
         .eq('id', userId)
-        .single();
-      
-      const { data: clientProfile, error: clientError } = await Promise.race([
-        clientQueryPromise,
-        timeoutPromise
-      ]) as any;
+        .maybeSingle();
 
-      console.log('Client query result:', { clientProfile, clientError });
-
-      if (clientProfile && !clientError) {
+      if (clientProfile) {
         // User is a client
         const appUser: User = {
           id: clientProfile.id,
@@ -147,59 +123,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           org_id: clientProfile.org_id
         };
         setUser(appUser);
-        setLoading(false);
         console.log('Client user profile loaded successfully:', appUser.name);
         return;
       }
 
       // If user not found in either table
-      console.error('User profile not found in admin_users or client_users tables for user:', userId);
-      console.error('Admin error:', adminError);
-      console.error('Client error:', clientError);
-      
-      // Set user to null if profile not found
-      console.log('User profile not found, signing out...');
-      setUser(null);
-      setLoading(false);
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
+      console.error('User profile not found in admin_users or client_users tables');
+      // Don't throw error immediately, user might be newly created
+      console.log('User profile not found, this might be a newly created user');
 
     } catch (error) {
       console.error('Error in loadUserProfile:', error);
-      
-      if (error instanceof Error && error.message.includes('timeout')) {
-        console.error('Profile loading timed out - falling back to sign out');
-      }
-      
-      setUser(null);
-      setLoading(false);
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
+      // Don't throw error, just log it
+      console.log('Will retry loading user profile...');
     }
   };
 
   const checkUser = async () => {
-    console.log('Checking user session...');
     if (isSupabaseConfigured() && supabase) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        console.log('Session check result:', session?.user?.id || 'No session');
         if (session?.user) {
           await loadUserProfile(session.user.id);
-        } else {
-          console.log('No active session found');
-          setLoading(false);
         }
       } catch (error) {
         console.error('Error checking user session:', error);
-        setLoading(false);
       }
-    } else {
-      console.log('Supabase not configured, using mock mode');
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const login = async (orgCode: string, email: string, password: string) => {

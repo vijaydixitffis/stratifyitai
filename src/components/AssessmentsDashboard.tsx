@@ -29,12 +29,7 @@ import {
   X,
   ArrowLeft,
   Loader2,
-  RefreshCw,
-  Briefcase,
-  Activity,
-  Cog,
-  Lightbulb,
-  Workflow
+  RefreshCw
 } from 'lucide-react';
 import { PortfolioAnalysisService, PACategoryWithAssessments, PAAssessment } from '../services/portfolioAnalysisService';
 
@@ -63,12 +58,7 @@ const AssessmentsDashboard: React.FC = () => {
     Users,
     Lock,
     Smartphone,
-    GitBranch,
-    Briefcase,
-    Activity,
-    Cog,
-    Lightbulb,
-    Workflow
+    GitBranch
   };
 
   useEffect(() => {
