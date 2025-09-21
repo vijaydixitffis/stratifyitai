@@ -58,11 +58,11 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     console.log('AuthProvider: Initializing authentication...');
 
-    // Check if user is already logged in
-    checkUser();
-
     // Listen for auth changes if Supabase is configured
     if (isSupabaseConfigured() && supabase) {
+      // Check if user is already logged in first
+      checkUser();
+      
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
           console.log('Auth state change event:', event, 'Session:', session?.user?.id || 'none');
@@ -84,6 +84,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       return () => subscription.unsubscribe();
     } else {
       console.log('AuthProvider: Supabase not configured, using demo mode');
+      // For demo mode, still check for any existing session
+      checkUser();
       setLoading(false);
       setIsInitialized(true);
     }
@@ -135,182 +137,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             }
           });
         }
-      }, 3000); // Reduced to 3 seconds for faster fallback
+      }, 1000); // Reduced to 1 second for faster fallback
 
-      // Try to create/get user profile using the database function
-      // This will create a profile if it doesn't exist
+      // Skip database profile creation for now - just use auth session data
       try {
-        const { data: profileData, error: profileError } = await supabase!
-          .rpc('create_current_user_profile');
-
-        if (profileLoadCompleted) return;
-        
-        if (profileData && !profileError) {
-          console.log('AuthProvider: User profile created/retrieved successfully:', profileData);
+        const { data: session } = await supabase!.auth.getSession();
+        if (session?.session?.user) {
           clearTimeout(timeoutId);
-
-          // If profile was just created, fetch the full profile data
-          if (profileData.exists === true) {
-            // Profile already existed, fetch it
-            const { data: userProfile, error: fetchError } = await supabase!
-              .from('users')
-              .select('id, name, email, role, org_id, organization')
-              .eq('id', userId)
-              .maybeSingle();
-
-            if (userProfile && !fetchError && !profileLoadCompleted) {
-              const appUser: User = {
-                id: userProfile.id,
-                name: userProfile.name,
-                email: userProfile.email || '',
-                role: userProfile.role,
-                organization: userProfile.organization || 'Unknown Organization',
-                orgCode: userProfile.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
-                org_id: userProfile.org_id || undefined
-              };
-              setUser(appUser);
-              setLoading(false);
-              setIsInitialized(true);
-              profileLoadCompleted = true;
-              console.log('AuthProvider: User profile loaded successfully:', appUser.name);
-              return;
-            }
-          } else {
-            // Profile was just created, use the returned data
-            const appUser: User = {
-              id: profileData.id,
-              name: profileData.name,
-              email: profileData.email || '',
-              role: profileData.role,
-              organization: profileData.organization || 'Unknown Organization',
-              orgCode: profileData.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
-              org_id: profileData.org_id || undefined
-            };
-            setUser(appUser);
-            setLoading(false);
-            setIsInitialized(true);
-            profileLoadCompleted = true;
-            console.log('AuthProvider: User profile created successfully:', appUser.name);
-            return;
-          }
-        }
-      } catch (rpcError) {
-        console.log('AuthProvider: RPC call failed:', rpcError);
-      }
-
-      if (profileLoadCompleted) return;
-      
-      console.log('AuthProvider: RPC call failed or returned no data, trying fallbacks');
-
-      // Clear timeout and try fallback
-      clearTimeout(timeoutId);
-
-      // Fallback: Try to load existing profile directly
-      console.log('AuthProvider: Trying direct profile fetch as fallback');
-      try {
-        const { data: userProfile, error: fetchError } = await supabase!
-          .from('users')
-          .select('id, name, email, role, org_id, organization')
-          .eq('id', userId)
-          .maybeSingle();
-
-        if (profileLoadCompleted) return;
-
-        if (userProfile && !fetchError) {
-          console.log('AuthProvider: Found existing user profile via fallback, setting user data...');
-          const appUser: User = {
-            id: userProfile.id,
-            name: userProfile.name,
-            email: userProfile.email || '',
-            role: userProfile.role,
-            organization: userProfile.organization || 'Unknown Organization',
-            orgCode: userProfile.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
-            org_id: userProfile.org_id || undefined
-          };
-          setUser(appUser);
-          setLoading(false);
-          setIsInitialized(true);
           profileLoadCompleted = true;
-          console.log('AuthProvider: User profile loaded via fallback:', appUser.name);
-          return;
-        }
-      } catch (fallbackError) {
-        console.log('AuthProvider: Direct profile fetch failed:', fallbackError);
-      }
-
-      if (profileLoadCompleted) return;
-
-      console.log('AuthProvider: Profile not found via fallback, creating minimal profile');
-
-      // Create minimal profile if user doesn't exist in users table
-      try {
-        const { data: session } = await supabase!.auth.getSession();
-        const userEmail = session?.session?.user?.email;
-        const userName = session?.session?.user?.user_metadata?.name || userEmail?.split('@')[0] || 'Unknown User';
-
-        const { data: newProfile, error: insertError } = await supabase!
-          .from('users')
-          .insert({
-            id: userId,
-            name: userName,
-            email: userEmail || '',
-            role: 'client-manager', // Default role
-            organization: 'Unknown Organization'
-          })
-          .select('id, name, email, role, org_id, organization')
-          .single();
-
-        if (newProfile && !insertError && !profileLoadCompleted) {
-          const appUser: User = {
-            id: newProfile.id,
-            name: newProfile.name,
-            email: newProfile.email || '',
-            role: newProfile.role,
-            organization: newProfile.organization || 'Unknown Organization',
-            orgCode: newProfile.role === 'admin' ? 'ADMIN' : 'UNKNOWN',
-            org_id: newProfile.org_id || undefined
-          };
-          setUser(appUser);
-          setLoading(false);
-          setIsInitialized(true);
-          profileLoadCompleted = true;
-          console.log('AuthProvider: Minimal user profile created successfully:', appUser.name);
-          return;
-        }
-      } catch (insertError) {
-        console.error('AuthProvider: Error creating minimal profile:', insertError);
-      }
-
-      if (profileLoadCompleted) return;
-
-      // Final fallback - create basic user object from auth session
-      console.log('AuthProvider: Using auth session data as final fallback');
-      try {
-        const { data: session } = await supabase!.auth.getSession();
-        if (session?.session?.user && !profileLoadCompleted) {
+          
           const authUser = session.session.user;
           const appUser: User = {
             id: authUser.id,
             name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown User',
             email: authUser.email || '',
-            role: 'client-manager', // Default role
-            organization: 'Unknown Organization',
-            orgCode: 'UNKNOWN'
+            role: authUser.user_metadata?.role || 'client-manager',
+            organization: authUser.user_metadata?.organization || 'Unknown Organization',
+            orgCode: authUser.user_metadata?.orgCode || (authUser.user_metadata?.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
+            org_id: authUser.user_metadata?.org_id || undefined
           };
           setUser(appUser);
           setLoading(false);
           setIsInitialized(true);
-          profileLoadCompleted = true;
-          console.log('AuthProvider: Using auth session as final fallback:', appUser.name);
+          console.log('AuthProvider: User loaded from auth session:', appUser.name);
           return;
         }
       } catch (sessionError) {
-        console.error('AuthProvider: Error getting session for fallback:', sessionError);
+        console.error('AuthProvider: Error getting session:', sessionError);
       }
 
       // If all else fails, set user to null but complete initialization
       if (!profileLoadCompleted) {
-        console.log('AuthProvider: All profile loading attempts failed, setting user to null');
+        console.log('AuthProvider: No session found, setting user to null');
         setUser(null);
         setLoading(false);
         setIsInitialized(true);
@@ -339,7 +197,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
             setIsInitialized(true);
             sessionCheckCompleted = true;
           }
-        }, 2000); // Reduced to 2 seconds for faster fallback
+        }, 1000); // Reduced to 1 second for faster fallback
 
         const { data: { session }, error } = await supabase.auth.getSession();
         console.log('AuthProvider: Session check result:', session?.user?.id || 'no session', error);
@@ -356,7 +214,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           }
 
           if (session?.user) {
-            // Use the new loadUserProfile function which will create profile if needed
+            // Load user profile from session data
             await loadUserProfile(session.user.id);
           } else {
             // Explicitly handle no session case
