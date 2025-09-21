@@ -158,19 +158,11 @@ export class AssetService {
   // Helper method to check if user is admin
   private static async isUserAdmin(userId: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase!
-        .from('users')
-        .select('id')
-        .eq('id', userId)
-        .like('role', 'admin-%')
-        .maybeSingle();
-
-      if (error) {
-        console.error('Error checking admin status:', error);
-        return false;
-      }
-
-      return !!data;
+      // Get user role directly from session metadata to avoid RLS recursion
+      const { data: { session } } = await supabase!.auth.getSession();
+      const userRole = session?.user?.user_metadata?.role;
+      
+      return userRole && userRole.startsWith('admin-');
     } catch (error) {
       console.error('Error in isUserAdmin:', error);
       return false;
