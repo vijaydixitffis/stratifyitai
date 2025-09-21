@@ -51,7 +51,7 @@ const AppContent: React.FC = () => {
   
   // Load organizations immediately when user logs in (especially for admins)
   useEffect(() => {
-    if (user && isInitialized) {
+    if (user && isInitialized && (user.role === 'admin' || user.role === 'admin-super' || user.orgCode === 'ADMIN')) {
       reloadOrgs();
     } else if (!user && isInitialized) {
       // Clear orgs when user logs out

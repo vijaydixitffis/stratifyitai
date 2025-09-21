@@ -40,7 +40,7 @@ const Header: React.FC<HeaderProps> = ({ onShowOnboardOrg, orgs, reloadOrgs }) =
           {user && (
             <div className="flex items-center space-x-4">
               {/* Org selector for ADMIN admins */}
-              {isAdmin && user.orgCode === 'ADMIN' && (
+              {isAdmin && (user.orgCode === 'ADMIN' || user.role === 'admin' || user.role === 'admin-super') && (
                 <>
                   <select
                     className="border border-gray-300 rounded px-3 py-2 text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
