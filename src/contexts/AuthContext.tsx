@@ -9,7 +9,7 @@ interface AuthContextType {
   isClient: boolean;
   isAdmin: boolean;
   loading: boolean;
-  isInitialized: boolean; // Add this to track when auth is fully initialized
+  isInitialized: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -55,189 +55,191 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [loading, setLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  // Initialize auth state
   useEffect(() => {
-    console.log('AuthProvider: Initializing authentication...');
+    console.log('AuthProvider: Starting initialization...');
+    initializeAuth();
+  }, []);
 
-    // Listen for auth changes if Supabase is configured
-    if (isSupabaseConfigured() && supabase) {
-      // Check if user is already logged in first
-      checkUser();
+  const initializeAuth = async () => {
+    console.log('AuthProvider: Initializing auth state...');
+    
+    if (!isSupabaseConfigured() || !supabase) {
+      console.log('AuthProvider: Supabase not configured, using demo mode');
+      setLoading(false);
+      setIsInitialized(true);
+      return;
+    }
+
+    try {
+      // Check current session
+      const { data: { session }, error } = await supabase.auth.getSession();
       
+      if (error) {
+        console.error('AuthProvider: Error getting session:', error);
+        setUser(null);
+      } else if (session?.user) {
+        console.log('AuthProvider: Found existing session for user:', session.user.id);
+        await processUser(session.user);
+      } else {
+        console.log('AuthProvider: No existing session found');
+        setUser(null);
+      }
+
+      // Set up auth state listener
       const { data: { subscription } } = supabase.auth.onAuthStateChange(
         async (event, session) => {
-          console.log('Auth state change event:', event, 'Session:', session?.user?.id || 'none');
-          console.log('AuthProvider: Auth state change - loading:', loading, 'isInitialized:', isInitialized, 'user:', user?.id || 'none');
-
-          if (session?.user) {
-            // Try to load user profile
-            await loadUserProfile(session.user.id);
-          } else {
-            // Explicitly handle no session case
-            console.log('Auth state change: No session found, clearing user state');
+          console.log('AuthProvider: Auth state changed:', event);
+          
+          if (event === 'SIGNED_IN' && session?.user) {
+            console.log('AuthProvider: User signed in:', session.user.id);
+            await processUser(session.user);
+          } else if (event === 'SIGNED_OUT') {
+            console.log('AuthProvider: User signed out');
             setUser(null);
-            setLoading(false);
-            setIsInitialized(true);
           }
         }
       );
 
-      return () => subscription.unsubscribe();
-    } else {
-      console.log('AuthProvider: Supabase not configured, using demo mode');
-      // For demo mode, still check for any existing session
-      checkUser();
-      setLoading(false);
-      setIsInitialized(true);
-    }
-  }, []);
+      // Cleanup subscription on unmount
+      return () => {
+        console.log('AuthProvider: Cleaning up auth subscription');
+        subscription.unsubscribe();
+      };
 
-  const loadUserProfile = async (userId: string) => {
-    try {
-      console.log('AuthProvider: Loading user profile for:', userId);
-      
-      // Get current session and extract user data
-      const { data: session } = await supabase!.auth.getSession();
-      console.log('AuthProvider: Got session data:', session?.session?.user?.id || 'no session');
-      
-      if (session?.session?.user) {
-        const authUser = session.session.user;
-        console.log('AuthProvider: Processing auth user:', authUser.id, authUser.email);
-        
-        const appUser: User = {
-          id: authUser.id,
-          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown User',
-          email: authUser.email || '',
-          role: authUser.user_metadata?.role || 'client-manager',
-          organization: authUser.user_metadata?.organization || 'Unknown Organization',
-          orgCode: authUser.user_metadata?.orgCode || (authUser.user_metadata?.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
-          org_id: authUser.user_metadata?.org_id || undefined
-        };
-        
-        console.log('AuthProvider: Setting user:', appUser.name, appUser.role);
-        setUser(appUser);
-        setLoading(false);
-        setIsInitialized(true);
-        console.log('AuthProvider: User loaded successfully:', appUser.name);
-      } else {
-        console.log('AuthProvider: No session found, setting user to null');
-        setUser(null);
-        setLoading(false);
-        setIsInitialized(true);
-      }
     } catch (error) {
-      console.error('AuthProvider: Error in loadUserProfile:', error);
+      console.error('AuthProvider: Error during initialization:', error);
       setUser(null);
+    } finally {
       setLoading(false);
       setIsInitialized(true);
+      console.log('AuthProvider: Initialization complete');
     }
   };
 
-  const checkUser = async () => {
-    console.log('AuthProvider: Checking user session...');
-    if (isSupabaseConfigured() && supabase) {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('AuthProvider: Session check result:', session?.user?.id || 'no session', error);
-
-        if (error) {
-          console.error('AuthProvider: Error checking session:', error);
-          setLoading(false);
-          setIsInitialized(true);
-          return;
-        }
-
-        if (session?.user) {
-          // Load user profile from session data
-          await loadUserProfile(session.user.id);
-        } else {
-          // Explicitly handle no session case
-          console.log('AuthProvider: No session found during check, setting up for login');
-          setUser(null);
-          setLoading(false);
-          setIsInitialized(true);
-        }
-      } catch (error) {
-        console.error('AuthProvider: Error checking user session:', error);
-        setUser(null);
-        setLoading(false);
-        setIsInitialized(true);
-      }
-    } else {
-      console.log('AuthProvider: Demo mode - no session check needed');
-      setLoading(false);
-      setIsInitialized(true);
+  const processUser = async (authUser: any) => {
+    try {
+      console.log('AuthProvider: Processing user:', authUser.id, authUser.email);
+      
+      // Extract user data from auth user metadata
+      const userData = authUser.user_metadata || {};
+      
+      const appUser: User = {
+        id: authUser.id,
+        name: userData.name || authUser.email?.split('@')[0] || 'Unknown User',
+        email: authUser.email || '',
+        role: userData.role || 'client-manager',
+        organization: userData.organization || 'Unknown Organization',
+        orgCode: userData.orgCode || (userData.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
+        org_id: userData.org_id || undefined
+      };
+      
+      console.log('AuthProvider: Setting user data:', appUser.name, appUser.role, appUser.orgCode);
+      setUser(appUser);
+      
+    } catch (error) {
+      console.error('AuthProvider: Error processing user:', error);
+      setUser(null);
     }
   };
 
   const login = async (orgCode: string, email: string, password: string) => {
-    if (isSupabaseConfigured() && supabase) {
-      try {
-        // Handle ADMIN org code differently
-        if (orgCode.toUpperCase() === 'ADMIN') {
-          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-          if (error) {
-            setUser(null);
-            throw new Error('Invalid email or password. Please try again.');
-          }
-          if (data.user) {
-            // For admin users, we don't need to check role immediately
-            // The trigger function will create the profile automatically
-            console.log('Admin login successful, profile will be created by trigger');
-            await loadUserProfile(data.user.id);
-          }
-        } else {
-          // For client users, just validate org code exists
-          const { data: orgData, error: orgError } = await supabase
-            .from('client_orgs')
-            .select('*')
-            .eq('org_code', orgCode.toUpperCase())
-            .single();
-          if (orgError || !orgData) {
-            setUser(null);
-            throw new Error('Invalid organization code.');
-          }
-          const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-          if (error) {
-            setUser(null);
-            throw new Error('Invalid email or password. Please try again.');
-          }
-          if (data.user) {
-            console.log('Client login successful, profile will be created by trigger');
-            await loadUserProfile(data.user.id);
-          }
-        }
-      } catch (error) {
-        setUser(null);
-        if (error instanceof Error) {
-          throw new Error(error.message || 'Login failed. Please check your credentials.');
-        } else {
-          throw new Error('Login failed. Please check your credentials.');
-        }
-      }
-    } else {
+    console.log('AuthProvider: Login attempt for:', email, 'org:', orgCode);
+    
+    if (!isSupabaseConfigured() || !supabase) {
       // Mock authentication for demo
       const foundUser = mockUsers.find(u => u.email === email && u.orgCode === orgCode.toUpperCase());
       if (foundUser && password === 'demo123') {
+        console.log('AuthProvider: Demo login successful for:', foundUser.name);
         setUser(foundUser);
+        return;
       } else {
-        setUser(null);
         throw new Error('Invalid credentials. Use demo123 as password for demo accounts.');
       }
+    }
+
+    try {
+      // Validate organization code for non-admin users
+      if (orgCode.toUpperCase() !== 'ADMIN') {
+        console.log('AuthProvider: Validating org code:', orgCode);
+        const { data: orgData, error: orgError } = await supabase
+          .from('client_orgs')
+          .select('org_id, org_name')
+          .eq('org_code', orgCode.toUpperCase())
+          .single();
+          
+        if (orgError || !orgData) {
+          console.error('AuthProvider: Invalid org code:', orgCode, orgError);
+          throw new Error('Invalid organization code.');
+        }
+        console.log('AuthProvider: Org validation successful:', orgData.org_name);
+      }
+
+      // Attempt login
+      console.log('AuthProvider: Attempting Supabase login...');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        console.error('AuthProvider: Login error:', error);
+        throw new Error('Invalid email or password. Please try again.');
+      }
+
+      if (!data.user) {
+        console.error('AuthProvider: No user returned from login');
+        throw new Error('Login failed - no user data returned.');
+      }
+
+      console.log('AuthProvider: Login successful for user:', data.user.id);
+      // User will be processed by the auth state change listener
+      
+    } catch (error) {
+      console.error('AuthProvider: Login failed:', error);
+      setUser(null);
+      throw error;
     }
   };
 
   const logout = async () => {
+    console.log('AuthProvider: Logging out...');
+    
     if (isSupabaseConfigured() && supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+        console.log('AuthProvider: Supabase logout successful');
+      } catch (error) {
+        console.error('AuthProvider: Error during logout:', error);
+      }
     }
+    
     setUser(null);
+    console.log('AuthProvider: User cleared');
   };
 
-  const isClient = user?.role.startsWith('client') || false;
-  const isAdmin = user?.role.startsWith('admin') || false;
+  const isClient = user?.role?.startsWith('client') || false;
+  const isAdmin = user?.role?.startsWith('admin') || false;
+
+  const contextValue = {
+    user,
+    login,
+    logout,
+    isClient,
+    isAdmin,
+    loading,
+    isInitialized
+  };
+
+  console.log('AuthProvider: Rendering with state:', {
+    hasUser: !!user,
+    loading,
+    isInitialized,
+    userRole: user?.role || 'none'
+  });
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isClient, isAdmin, loading, isInitialized }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
