@@ -159,9 +159,10 @@ export class AssetService {
   private static async isUserAdmin(userId: string): Promise<boolean> {
     try {
       const { data, error } = await supabase!
-        .from('admin_users')
+        .from('users')
         .select('id')
         .eq('id', userId)
+        .like('role', 'admin-%')
         .maybeSingle();
 
       if (error) {
