@@ -97,8 +97,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       
       // Get current session and extract user data
       const { data: session } = await supabase!.auth.getSession();
+      console.log('AuthProvider: Got session data:', session?.session?.user?.id || 'no session');
+      
       if (session?.session?.user) {
         const authUser = session.session.user;
+        console.log('AuthProvider: Processing auth user:', authUser.id, authUser.email);
+        
         const appUser: User = {
           id: authUser.id,
           name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown User',
@@ -108,15 +112,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           orgCode: authUser.user_metadata?.orgCode || (authUser.user_metadata?.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
           org_id: authUser.user_metadata?.org_id || undefined
         };
+        
+        console.log('AuthProvider: Setting user:', appUser.name, appUser.role);
         setUser(appUser);
-        console.log('AuthProvider: User loaded from auth session:', appUser.name);
+        setLoading(false);
+        setIsInitialized(true);
+        console.log('AuthProvider: User loaded successfully:', appUser.name);
       } else {
         console.log('AuthProvider: No session found, setting user to null');
         setUser(null);
+        setLoading(false);
+        setIsInitialized(true);
       }
-      
-      setLoading(false);
-      setIsInitialized(true);
     } catch (error) {
       console.error('AuthProvider: Error in loadUserProfile:', error);
       setUser(null);
