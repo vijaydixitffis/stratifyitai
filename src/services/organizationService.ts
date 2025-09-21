@@ -67,10 +67,18 @@ export class OrganizationService {
 
     try {
       console.log('Fetching organizations from Supabase...');
-      const { data, error } = await supabase
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 5000); // Reduced to 5 seconds
+      });
+
+      const fetchPromise = supabase
         .from('client_orgs')
         .select('*')
         .order('created_at', { ascending: false });
+
+      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
       if (error) {
         console.error('Error fetching organizations:', error);
@@ -81,6 +89,7 @@ export class OrganizationService {
       return data || [];
     } catch (error) {
       console.error('Error fetching organizations:', error);
+      // Return cached data or empty array if available
       throw new Error('Failed to fetch organizations');
     }
   }
@@ -108,8 +117,13 @@ export class OrganizationService {
 
     try {
       console.log('Creating organization:', orgData);
-      
-      const { data, error } = await supabase
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 5000); // Reduced to 5 seconds
+      });
+
+      const createPromise = supabase
         .from('client_orgs')
         .insert({
           org_code: orgData.org_code.toUpperCase(), // Ensure uppercase
@@ -120,6 +134,8 @@ export class OrganizationService {
         })
         .select()
         .single();
+
+      const { data, error } = await Promise.race([createPromise, timeoutPromise]);
 
       if (error) {
         console.error('Error creating organization:', error);
@@ -160,7 +176,12 @@ export class OrganizationService {
 
     try {
       console.log('Updating organization:', orgId, updates);
-      
+
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout')), 5000); // Reduced to 5 seconds
+      });
+
       // Prepare update data
       const updateData: any = {};
       if (updates.org_code) updateData.org_code = updates.org_code.toUpperCase();
@@ -169,12 +190,14 @@ export class OrganizationService {
       if (updates.sector !== undefined) updateData.sector = updates.sector;
       if (updates.remarks !== undefined) updateData.remarks = updates.remarks;
 
-      const { data, error } = await supabase
+      const updatePromise = supabase
         .from('client_orgs')
         .update(updateData)
         .eq('org_id', orgId)
         .select()
         .single();
+
+      const { data, error } = await Promise.race([updatePromise, timeoutPromise]);
 
       if (error) {
         console.error('Error updating organization:', error);
@@ -203,7 +226,7 @@ export class OrganizationService {
       
       // Check if organization has users
       const { data: users, error: usersError } = await supabase
-        .from('user_profiles')
+        .from('users')
         .select('id')
         .eq('org_id', orgId)
         .limit(1);
