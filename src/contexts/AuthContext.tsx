@@ -95,85 +95,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     try {
       console.log('AuthProvider: Loading user profile for:', userId);
       
-      let profileLoadCompleted = false;
-      
-      // Set a shorter timeout to prevent hanging with immediate fallback
-      const timeoutId = setTimeout(() => {
-        if (!profileLoadCompleted) {
-          console.warn('AuthProvider: User profile loading timeout, switching to fallback');
-          
-          // Immediate fallback to auth session data
-          supabase!.auth.getSession().then(({ data: session }) => {
-            if (session?.session?.user && !profileLoadCompleted) {
-              const authUser = session.session.user;
-              const appUser: User = {
-                id: authUser.id,
-                name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown User',
-                email: authUser.email || '',
-                role: 'client-manager', // Default role
-                organization: 'Unknown Organization',
-                orgCode: 'UNKNOWN'
-              };
-              setUser(appUser);
-              setLoading(false);
-              setIsInitialized(true);
-              profileLoadCompleted = true;
-              console.log('AuthProvider: Set user from timeout fallback:', appUser.name);
-            } else if (!profileLoadCompleted) {
-              // Final fallback if no session
-              setUser(null);
-              setLoading(false);
-              setIsInitialized(true);
-              profileLoadCompleted = true;
-              console.log('AuthProvider: Timeout fallback - no session, setting user to null');
-            }
-          }).catch((fallbackError) => {
-            console.error('AuthProvider: Timeout fallback failed:', fallbackError);
-            if (!profileLoadCompleted) {
-              setUser(null);
-              setLoading(false);
-              setIsInitialized(true);
-              profileLoadCompleted = true;
-            }
-          });
-        }
-      }, 1000); // Reduced to 1 second for faster fallback
-
-      // Skip database profile creation for now - just use auth session data
-      try {
-        const { data: session } = await supabase!.auth.getSession();
-        if (session?.session?.user) {
-          clearTimeout(timeoutId);
-          profileLoadCompleted = true;
-          
-          const authUser = session.session.user;
-          const appUser: User = {
-            id: authUser.id,
-            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown User',
-            email: authUser.email || '',
-            role: authUser.user_metadata?.role || 'client-manager',
-            organization: authUser.user_metadata?.organization || 'Unknown Organization',
-            orgCode: authUser.user_metadata?.orgCode || (authUser.user_metadata?.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
-            org_id: authUser.user_metadata?.org_id || undefined
-          };
-          setUser(appUser);
-          setLoading(false);
-          setIsInitialized(true);
-          console.log('AuthProvider: User loaded from auth session:', appUser.name);
-          return;
-        }
-      } catch (sessionError) {
-        console.error('AuthProvider: Error getting session:', sessionError);
-      }
-
-      // If all else fails, set user to null but complete initialization
-      if (!profileLoadCompleted) {
+      // Get current session and extract user data
+      const { data: session } = await supabase!.auth.getSession();
+      if (session?.session?.user) {
+        const authUser = session.session.user;
+        const appUser: User = {
+          id: authUser.id,
+          name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || 'Unknown User',
+          email: authUser.email || '',
+          role: authUser.user_metadata?.role || 'client-manager',
+          organization: authUser.user_metadata?.organization || 'Unknown Organization',
+          orgCode: authUser.user_metadata?.orgCode || (authUser.user_metadata?.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
+          org_id: authUser.user_metadata?.org_id || undefined
+        };
+        setUser(appUser);
+        console.log('AuthProvider: User loaded from auth session:', appUser.name);
+      } else {
         console.log('AuthProvider: No session found, setting user to null');
         setUser(null);
-        setLoading(false);
-        setIsInitialized(true);
-        profileLoadCompleted = true;
       }
+      
+      setLoading(false);
+      setIsInitialized(true);
     } catch (error) {
       console.error('AuthProvider: Error in loadUserProfile:', error);
       setUser(null);
@@ -185,53 +128,32 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const checkUser = async () => {
     console.log('AuthProvider: Checking user session...');
     if (isSupabaseConfigured() && supabase) {
-      let sessionCheckCompleted = false;
-      
       try {
-        // Add timeout to session check to prevent hanging
-        const timeoutId = setTimeout(() => {
-          if (!sessionCheckCompleted) {
-            console.warn('AuthProvider: Session check timeout, proceeding with no session');
-            setUser(null);
-            setLoading(false);
-            setIsInitialized(true);
-            sessionCheckCompleted = true;
-          }
-        }, 1000); // Reduced to 1 second for faster fallback
-
         const { data: { session }, error } = await supabase.auth.getSession();
         console.log('AuthProvider: Session check result:', session?.user?.id || 'no session', error);
 
-        if (!sessionCheckCompleted) {
-          clearTimeout(timeoutId);
-          sessionCheckCompleted = true;
+        if (error) {
+          console.error('AuthProvider: Error checking session:', error);
+          setLoading(false);
+          setIsInitialized(true);
+          return;
+        }
 
-          if (error) {
-            console.error('AuthProvider: Error checking session:', error);
-            setLoading(false);
-            setIsInitialized(true);
-            return;
-          }
-
-          if (session?.user) {
-            // Load user profile from session data
-            await loadUserProfile(session.user.id);
-          } else {
-            // Explicitly handle no session case
-            console.log('AuthProvider: No session found during check, setting up for login');
-            setUser(null);
-            setLoading(false);
-            setIsInitialized(true);
-          }
+        if (session?.user) {
+          // Load user profile from session data
+          await loadUserProfile(session.user.id);
+        } else {
+          // Explicitly handle no session case
+          console.log('AuthProvider: No session found during check, setting up for login');
+          setUser(null);
+          setLoading(false);
+          setIsInitialized(true);
         }
       } catch (error) {
         console.error('AuthProvider: Error checking user session:', error);
-        if (!sessionCheckCompleted) {
-          setUser(null);
-          setLoading(false); // Always set loading to false to prevent hanging
-          setIsInitialized(true);
-          sessionCheckCompleted = true;
-        }
+        setUser(null);
+        setLoading(false);
+        setIsInitialized(true);
       }
     } else {
       console.log('AuthProvider: Demo mode - no session check needed');
