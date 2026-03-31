@@ -146,7 +146,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Header onShowOnboardOrg={handleShowOnboardOrg} orgs={orgs} />
+      <Header onShowOnboardOrg={handleShowOnboardOrg} orgs={orgs} reloadOrgs={reloadOrgs} />
       <Navigation activeTab={activeTab} onTabChange={setActiveTab} />
       <main>
         {renderContent()}
