@@ -172,9 +172,12 @@ const AssessmentsDashboard: React.FC = () => {
       <div className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Portfolio Analysis</h1>
-            <p className="mt-2 text-gray-600">
-              Comprehensive assessment framework for enterprise architecture transformation and IT strategy implementation
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-semibold uppercase tracking-wider text-blue-600">Phase 1 · Know your Landscape</span>
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900">Readiness Assessments</h1>
+            <p className="mt-1 text-gray-600">
+              AI readiness, application modernization, and database architecture assessments for your portfolio
             </p>
           </div>
           <button
