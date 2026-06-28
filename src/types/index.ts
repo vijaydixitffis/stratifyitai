@@ -15,6 +15,7 @@ export interface Asset {
   category: string;
   description: string;
   owner: string;
+  owner_email?: string;
   status: 'active' | 'inactive' | 'deprecated' | 'planned';
   criticality: 'high' | 'medium' | 'low';
   lastUpdated: string;
@@ -22,6 +23,32 @@ export interface Asset {
   tags: string[];
   metadata: Record<string, any>;
   org_id?: number;
+  // CMDB identification & sourcing
+  asset_tag?: string;
+  vendor?: string;
+  sourcing_type?: 'cots' | 'custom_built' | 'open_source' | 'saas';
+  business_unit?: string;
+  environment?: 'production' | 'staging' | 'development' | 'test' | 'dr';
+  // Infrastructure identity
+  hostname?: string;
+  ip_address?: string;
+  serial_number?: string;
+  location?: string;
+  // Lifecycle dates
+  purchase_date?: string;
+  warranty_end_date?: string;
+  end_of_life_date?: string;
+  end_of_support_date?: string;
+  last_reviewed_date?: string;
+  // Financial
+  annual_cost?: number;
+  license_type?: string;
+  license_expiry_date?: string;
+  support_contract_id?: string;
+  // Compliance & risk
+  data_classification?: 'public' | 'internal' | 'confidential' | 'restricted';
+  compliance_tags?: string[];
+  criticality_justification?: string;
 }
 
 export interface AssetUpload {

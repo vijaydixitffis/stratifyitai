@@ -8,6 +8,8 @@ interface AuthContextType {
   logout: () => void;
   isClient: boolean;
   isAdmin: boolean;
+  canEnrich: boolean;
+  canRationalize: boolean;
   loading: boolean;
   isInitialized: boolean;
 }
@@ -220,6 +222,10 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const isClient = user?.role?.startsWith('client') || false;
   const isAdmin = user?.role?.startsWith('admin') || false;
+  // Architects and admins can run AI reviews and attach documents
+  const canEnrich = user?.role === 'client-architect' || isAdmin;
+  // Only admins can trigger portfolio rationalization
+  const canRationalize = isAdmin;
 
   const contextValue = {
     user,
@@ -227,6 +233,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     logout,
     isClient,
     isAdmin,
+    canEnrich,
+    canRationalize,
     loading,
     isInitialized
   };

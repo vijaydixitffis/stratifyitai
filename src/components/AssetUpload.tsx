@@ -100,6 +100,22 @@ const AssetUpload: React.FC<AssetUploadProps> = ({ onClose }) => {
   const validStatuses = ['active', 'inactive', 'deprecated', 'planned'];
   const validCriticalities = ['high', 'medium', 'low'];
 
+  // Common abbreviations/aliases that map to standard asset types
+  const assetTypeAliases: Record<string, string> = {
+    'sso': 'third-party-service',
+    'iam': 'third-party-service',
+    'erp': 'application',
+    'crm': 'application',
+    'rdbms': 'database',
+    'etl': 'middleware',
+    'edr': 'third-party-service',
+    'dlp': 'third-party-service',
+    'waf': 'infrastructure',
+    'vpn': 'infrastructure',
+    'dc': 'infrastructure',
+    'cdn': 'cloud-service',
+  };
+
   const validateSpreadsheetData = (data: any[]): ValidationResult => {
     const errors: ValidationError[] = [];
     const warnings: ValidationError[] = [];
@@ -109,15 +125,12 @@ const AssetUpload: React.FC<AssetUploadProps> = ({ onClose }) => {
       const rowNumber = index + 2; // +2 because index starts at 0 and we skip header row
       let rowIsValid = true;
 
-      // Required fields validation
+      // Required fields — Status and Criticality are optional (they have safe defaults)
       const requiredFields = [
         { field: 'Asset Name', key: 'name' },
         { field: 'Asset Type', key: 'type' },
-        { field: 'Category', key: 'category' },
         { field: 'Description', key: 'description' },
         { field: 'Owner', key: 'owner' },
-        { field: 'Status', key: 'status' },
-        { field: 'Criticality', key: 'criticality' }
       ];
 
       requiredFields.forEach(({ field, key }) => {
@@ -133,55 +146,52 @@ const AssetUpload: React.FC<AssetUploadProps> = ({ onClose }) => {
         }
       });
 
-      // Asset Type validation
-      const assetType = (row['Asset Type'] || row['type'] || '').toString().toLowerCase().trim();
-      if (assetType && !validAssetTypes.includes(assetType)) {
-        errors.push({
+      // Asset Type validation — resolve aliases first, then warn if still unrecognised
+      const rawAssetType = (row['Asset Type'] || row['type'] || '').toString().toLowerCase().trim();
+      const assetType = assetTypeAliases[rawAssetType] || rawAssetType;
+      if (rawAssetType && !validAssetTypes.includes(assetType)) {
+        warnings.push({
           row: rowNumber,
           field: 'Asset Type',
-          value: assetType,
-          message: `Invalid asset type. Must be one of: ${validAssetTypes.join(', ')}`
+          value: rawAssetType,
+          message: `Unrecognised asset type "${rawAssetType}". Will default to "application". Valid types: ${validAssetTypes.join(', ')}`
         });
-        rowIsValid = false;
       }
 
-      // Category validation (only if asset type is valid)
+      // Category validation (only if asset type resolves to a known type)
       const category = (row['Category'] || row['category'] || '').toString().trim();
       if (assetType && validAssetTypes.includes(assetType) && category) {
         const validCategories = assetCategories[assetType as keyof typeof assetCategories];
         if (!validCategories.includes(category)) {
-          errors.push({
+          warnings.push({
             row: rowNumber,
             field: 'Category',
             value: category,
-            message: `Invalid category for ${assetType}. Must be one of: ${validCategories.join(', ')}`
+            message: `Category "${category}" not in standard list for ${assetType}. It will still be saved as-is.`
           });
-          rowIsValid = false;
         }
       }
 
-      // Status validation
+      // Status validation — warn and default to "active" rather than blocking
       const status = (row['Status'] || row['status'] || '').toString().toLowerCase().trim();
       if (status && !validStatuses.includes(status)) {
-        errors.push({
+        warnings.push({
           row: rowNumber,
           field: 'Status',
           value: status,
-          message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`
+          message: `Unrecognised status "${status}". Will default to "active". Valid values: ${validStatuses.join(', ')}`
         });
-        rowIsValid = false;
       }
 
-      // Criticality validation
+      // Criticality validation — warn and default to "medium" rather than blocking
       const criticality = (row['Criticality'] || row['criticality'] || '').toString().toLowerCase().trim();
       if (criticality && !validCriticalities.includes(criticality)) {
-        errors.push({
+        warnings.push({
           row: rowNumber,
           field: 'Criticality',
           value: criticality,
-          message: `Invalid criticality. Must be one of: ${validCriticalities.join(', ')}`
+          message: `Unrecognised criticality "${criticality}". Will default to "medium". Valid values: ${validCriticalities.join(', ')}`
         });
-        rowIsValid = false;
       }
 
       // Warnings for optional fields
@@ -217,13 +227,28 @@ const AssetUpload: React.FC<AssetUploadProps> = ({ onClose }) => {
     const data = [];
 
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+      // Handle quoted values with commas
+      const values: string[] = [];
+      let currentValue = '';
+      let inQuotes = false;
+
+      for (const char of lines[i]) {
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(currentValue.trim());
+          currentValue = '';
+        } else {
+          currentValue += char;
+        }
+      }
+      values.push(currentValue.trim());
+
       const row: any = {};
-      
       headers.forEach((header, index) => {
         row[header] = values[index] || '';
       });
-      
+
       data.push(row);
     }
 
@@ -273,28 +298,24 @@ const AssetUpload: React.FC<AssetUploadProps> = ({ onClose }) => {
     setValidationResult(null);
 
     try {
-      // For demo purposes, we'll simulate reading the file and validating
-      // In a real implementation, you'd use a library like xlsx or papaparse
+      // Read file content
+      const fileContent = await file.text();
       
-      // Simulate file reading delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Parse CSV data
+      const parsedData = parseCSVData(fileContent);
+      
+      if (parsedData.length === 0) {
+        alert('No data found in the file. Please check the file format.');
+        return;
+      }
 
-      // Mock CSV data for validation demo
-      const mockCSVData = `Asset Name,Asset Type,Category,Description,Owner,Status,Criticality,Tags
-Customer Portal,application,Web Application,Main customer-facing portal,IT Department,active,high,"web,customer,portal"
-Production Database,database,RDBMS (PostgreSQL),Primary production database,Database Team,active,high,"database,production,postgresql"
-Invalid Asset,invalid-type,Unknown Category,Test asset with invalid type,Test Team,active,high,"test"
-Legacy System,application,Legacy Application,Old mainframe system,Legacy Team,deprecated,medium,"legacy,mainframe"
-Missing Data,,,,,,,"incomplete"`;
-
-      const parsedData = parseCSVData(mockCSVData);
+      // Validate parsed data
       const validation = validateSpreadsheetData(parsedData);
-      
       setValidationResult(validation);
 
-      if (validation.isValid) {
-        // Proceed with upload if validation passes
-        await uploadAssets(file);
+      if (validation.isValid || validation.errors.length === 0) {
+        // Proceed with upload — warnings (invalid status/criticality/type) use safe defaults
+        await uploadAssets(file, parsedData);
       }
     } catch (error) {
       console.error('File processing failed:', error);

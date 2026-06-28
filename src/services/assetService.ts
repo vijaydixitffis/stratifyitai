@@ -1,5 +1,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { Asset } from '../types';
+import { processCSVRow, buildTechnicalSpecsJSON } from '../utils/csvColumnMapping';
 
 // Mock data for when Supabase is not configured
 const mockAssets: Asset[] = [
@@ -109,8 +110,7 @@ export class AssetService {
       console.log('Fetching assets from Supabase...');
 
       // Check if user is admin first
-      const { data: { session } } = await supabase!.auth.getSession();
-      const isAdmin = session?.user ? await this.isUserAdmin(session.user.id) : false;
+      const isAdmin = await this.isUserAdmin();
 
       if (isAdmin) {
         console.log('Admin user detected, fetching all assets...');
@@ -156,7 +156,7 @@ export class AssetService {
   }
 
   // Helper method to check if user is admin
-  private static async isUserAdmin(userId: string): Promise<boolean> {
+  private static async isUserAdmin(): Promise<boolean> {
     try {
       // Get user role directly from session metadata to avoid RLS recursion
       const { data: { session } } = await supabase!.auth.getSession();
@@ -291,8 +291,7 @@ export class AssetService {
 
     try {
       // Check if user is admin first
-      const { data: { session } } = await supabase!.auth.getSession();
-      const isAdmin = session?.user ? await this.isUserAdmin(session.user.id) : false;
+      const isAdmin = await this.isUserAdmin();
 
       if (isAdmin) {
         console.log('Admin user searching assets...');
@@ -361,12 +360,35 @@ export class AssetService {
       category: dbAsset.category,
       description: dbAsset.description,
       owner: dbAsset.owner,
+      owner_email: dbAsset.owner_email,
       status: dbAsset.status,
       criticality: dbAsset.criticality,
       tags: dbAsset.tags || [],
       metadata: dbAsset.metadata || {},
       createdBy: dbAsset.created_by,
-      lastUpdated: new Date(dbAsset.updated_at || dbAsset.created_at).toISOString().split('T')[0]
+      lastUpdated: new Date(dbAsset.updated_at || dbAsset.created_at).toISOString().split('T')[0],
+      // CMDB fields
+      asset_tag: dbAsset.asset_tag,
+      vendor: dbAsset.vendor,
+      sourcing_type: dbAsset.sourcing_type,
+      business_unit: dbAsset.business_unit,
+      environment: dbAsset.environment,
+      hostname: dbAsset.hostname,
+      ip_address: dbAsset.ip_address,
+      serial_number: dbAsset.serial_number,
+      location: dbAsset.location,
+      purchase_date: dbAsset.purchase_date,
+      warranty_end_date: dbAsset.warranty_end_date,
+      end_of_life_date: dbAsset.end_of_life_date,
+      end_of_support_date: dbAsset.end_of_support_date,
+      last_reviewed_date: dbAsset.last_reviewed_date,
+      annual_cost: dbAsset.annual_cost,
+      license_type: dbAsset.license_type,
+      license_expiry_date: dbAsset.license_expiry_date,
+      support_contract_id: dbAsset.support_contract_id,
+      data_classification: dbAsset.data_classification,
+      compliance_tags: dbAsset.compliance_tags,
+      criticality_justification: dbAsset.criticality_justification,
     };
   }
 
@@ -378,19 +400,206 @@ export class AssetService {
       category: asset.category,
       description: asset.description,
       owner: asset.owner,
+      owner_email: asset.owner_email ?? null,
       status: asset.status || 'active',
       criticality: asset.criticality || 'medium',
       tags: asset.tags || [],
       metadata: asset.metadata || {},
-      created_by: asset.createdBy || 'system'
+      created_by: asset.createdBy || 'system',
+      // CMDB identification & sourcing
+      asset_tag:               asset.asset_tag               ?? null,
+      vendor:                  asset.vendor                  ?? null,
+      sourcing_type:           asset.sourcing_type           ?? null,
+      business_unit:           asset.business_unit           ?? null,
+      environment:             asset.environment             ?? null,
+      // Infrastructure identity
+      hostname:                asset.hostname                ?? null,
+      ip_address:              asset.ip_address              ?? null,
+      serial_number:           asset.serial_number           ?? null,
+      location:                asset.location                ?? null,
+      // Lifecycle dates
+      purchase_date:           asset.purchase_date           ?? null,
+      warranty_end_date:       asset.warranty_end_date       ?? null,
+      end_of_life_date:        asset.end_of_life_date        ?? null,
+      end_of_support_date:     asset.end_of_support_date     ?? null,
+      last_reviewed_date:      asset.last_reviewed_date      ?? null,
+      // Financial
+      annual_cost:             asset.annual_cost             ?? null,
+      license_type:            asset.license_type            ?? null,
+      license_expiry_date:     asset.license_expiry_date     ?? null,
+      support_contract_id:     asset.support_contract_id     ?? null,
+      // Compliance & risk
+      data_classification:     asset.data_classification     ?? null,
+      compliance_tags:         asset.compliance_tags         ?? null,
+      criticality_justification: asset.criticality_justification ?? null,
     };
 
-    // Only include id if it exists (for updates)
     if (asset.id) {
       dbAsset.id = asset.id;
     }
 
     return dbAsset;
+  }
+
+  // Process CSV row and convert to asset format with CMDB field mapping
+  static processCSVRowToAsset(csvRow: Record<string, string>): Omit<Asset, 'id' | 'lastUpdated'> {
+    const { standardColumns, technicalSpecs, additionalSpecs } = processCSVRow(csvRow);
+
+    // ── Enum validation ────────────────────────────────────────────────────────
+    const validAssetTypes   = ['application','infrastructure','database','middleware','cloud-service','third-party-service'];
+    const validStatuses     = ['active','inactive','deprecated','planned'];
+    const validCriticalities= ['high','medium','low'];
+    const validSourcing     = ['cots','custom_built','open_source','saas'];
+    const validEnvironments = ['production','staging','development','test','dr'];
+    const validDataClass    = ['public','internal','confidential','restricted'];
+
+    const assetTypeAliases: Record<string, string> = {
+      'sso':'third-party-service','iam':'third-party-service',
+      'erp':'application','crm':'application',
+      'rdbms':'database','etl':'middleware',
+      'edr':'third-party-service','dlp':'third-party-service',
+      'waf':'infrastructure','vpn':'infrastructure',
+      'dc':'infrastructure','cdn':'cloud-service',
+    };
+
+    const col = (key: string) => standardColumns[key] || csvRow[key] || '';
+
+    const rawType   = col('Asset Type').toLowerCase();
+    const assetType = assetTypeAliases[rawType] || rawType;
+    const status    = col('Status').toLowerCase() || 'active';
+    const criticality = col('Criticality').toLowerCase() || 'medium';
+
+    // ── Tags ──────────────────────────────────────────────────────────────────
+    const tags = standardColumns['Tags']
+      ? standardColumns['Tags'].split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
+    // ── Compliance tags → text[] ───────────────────────────────────────────
+    const complianceRaw = standardColumns['Compliance Tags'];
+    const compliance_tags: string[] | undefined = complianceRaw
+      ? complianceRaw
+          .replace(/^["\s]+|["\s]+$/g, '')
+          .split(',')
+          .map(t => t.trim().replace(/^"+|"+$/g, ''))
+          .filter(Boolean)
+      : undefined;
+
+    // ── Annual cost → numeric ─────────────────────────────────────────────
+    const costRaw   = standardColumns['Annual Cost']?.replace(/[^0-9.]/g, '');
+    const annual_cost = costRaw ? parseFloat(costRaw) || undefined : undefined;
+
+    // ── Enum-gated CMDB scalars ───────────────────────────────────────────
+    const sourcingRaw = standardColumns['Sourcing Type']?.toLowerCase().replace(/[\s-]/g, '_');
+    const sourcing_type = validSourcing.includes(sourcingRaw ?? '') ? sourcingRaw as Asset['sourcing_type'] : undefined;
+
+    const envRaw    = standardColumns['Environment']?.toLowerCase();
+    const environment = validEnvironments.includes(envRaw ?? '') ? envRaw as Asset['environment'] : undefined;
+
+    const dataClassRaw = standardColumns['Data Classification']?.toLowerCase();
+    const data_classification = validDataClass.includes(dataClassRaw ?? '') ? dataClassRaw as Asset['data_classification'] : undefined;
+
+    // ── Metadata: parsed Technical Specs (JSON) + loose tech-spec columns ─
+    // Technical Specs (JSON) is now in standardColumns (not additionalSpecs)
+    let techSpecsFromJSON: Record<string, any> = {};
+    if (standardColumns['Technical Specs (JSON)']) {
+      try {
+        techSpecsFromJSON = JSON.parse(standardColumns['Technical Specs (JSON)']);
+      } catch {
+        // store raw string so it's at least visible in the view modal
+        techSpecsFromJSON = { raw_technical_specs: standardColumns['Technical Specs (JSON)'] };
+      }
+    }
+
+    // Relationship columns → metadata.relationships (for display until graph feature ships)
+    const relKeys: Array<[string, string]> = [
+      ['Runs On', 'runs_on'], ['Depends On', 'depends_on'],
+      ['Connects To', 'connects_to'], ['Part Of', 'part_of'], ['Backs Up', 'backs_up'],
+    ];
+    const relationships: Record<string, string> = {};
+    for (const [col, key] of relKeys) {
+      if (standardColumns[col]) relationships[key] = standardColumns[col];
+    }
+
+    const metadata: Record<string, any> = {
+      ...techSpecsFromJSON,
+      ...technicalSpecs,
+      ...(Object.keys(additionalSpecs).length > 0  ? { additional_specs: additionalSpecs }   : {}),
+      ...(Object.keys(relationships).length   > 0  ? { relationships }                       : {}),
+    };
+
+    return {
+      name:        col('Asset Name'),
+      type:        (validAssetTypes.includes(assetType) ? assetType : 'application') as Asset['type'],
+      category:    col('Category'),
+      description: col('Description'),
+      owner:       col('Owner'),
+      owner_email: standardColumns['Owner Email'] || undefined,
+      status:      (validStatuses.includes(status) ? status : 'active') as Asset['status'],
+      criticality: (validCriticalities.includes(criticality) ? criticality : 'medium') as Asset['criticality'],
+      tags,
+      metadata,
+      createdBy:   'csv-upload',
+      // CMDB identification & sourcing
+      asset_tag:               standardColumns['Asset Tag']          || undefined,
+      vendor:                  standardColumns['Vendor']             || undefined,
+      sourcing_type,
+      business_unit:           standardColumns['Business Unit']      || undefined,
+      environment,
+      // Infrastructure identity
+      hostname:                standardColumns['Hostname']           || undefined,
+      ip_address:              standardColumns['IP Address']         || undefined,
+      serial_number:           standardColumns['Serial Number']      || undefined,
+      location:                standardColumns['Location']           || undefined,
+      // Lifecycle dates
+      purchase_date:           standardColumns['Purchase Date']      || undefined,
+      warranty_end_date:       standardColumns['Warranty End Date']  || undefined,
+      end_of_life_date:        standardColumns['End of Life Date']   || undefined,
+      end_of_support_date:     standardColumns['End of Support Date']|| undefined,
+      last_reviewed_date:      standardColumns['Last Reviewed Date'] || undefined,
+      // Financial
+      annual_cost,
+      license_type:            standardColumns['License Type']       || undefined,
+      license_expiry_date:     standardColumns['License Expiry Date']|| undefined,
+      support_contract_id:     standardColumns['Support Contract ID']|| undefined,
+      // Compliance & risk
+      data_classification,
+      compliance_tags,
+      criticality_justification: standardColumns['Criticality Justification'] || undefined,
+    };
+  }
+
+  // Bulk create assets from CSV data
+  static async bulkCreateAssets(
+    csvRows: Record<string, string>[],
+    org_id?: number
+  ): Promise<{ inserted: number; errors: string[] }> {
+    if (!this.isSupabaseAvailable()) {
+      // Mock implementation
+      const assets = csvRows.map((row, index) => ({
+        ...this.processCSVRowToAsset(row),
+        id: `csv-${Date.now()}-${index}`,
+        lastUpdated: new Date().toISOString().split('T')[0],
+        org_id
+      }));
+      mockAssetStore.unshift(...assets);
+      return Promise.resolve({ inserted: assets.length, errors: [] });
+    }
+
+    const errors: string[] = [];
+    let inserted = 0;
+
+    for (const row of csvRows) {
+      try {
+        const asset = this.processCSVRowToAsset(row);
+        await this.createAsset(asset, org_id);
+        inserted++;
+      } catch (error) {
+        const assetName = row['Asset Name'] || 'Unknown';
+        errors.push(`${assetName}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    }
+
+    return { inserted, errors };
   }
 }
 

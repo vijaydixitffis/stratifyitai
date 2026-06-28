@@ -17,8 +17,6 @@ import {
   Loader2,
   AlertCircle,
   RefreshCw,
-  Wifi,
-  WifiOff,
   Brain,
 } from 'lucide-react';
 import AssetForm from './AssetForm';
@@ -218,20 +216,6 @@ const AssetInventory: React.FC = () => {
             </p>
           </div>
           
-          {/* Connection Status Indicator */}
-          <div className="flex items-center space-x-2">
-            {isSupabaseConfigured() ? (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-green-50 border border-green-200 rounded-full">
-                <Wifi className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium text-green-800">Connected to Database</span>
-              </div>
-            ) : (
-              <div className="flex items-center space-x-2 px-3 py-1 bg-orange-50 border border-orange-200 rounded-full">
-                <WifiOff className="h-4 w-4 text-orange-600" />
-                <span className="text-sm font-medium text-orange-800">Using Mock Data</span>
-              </div>
-            )}
-          </div>
         </div>
       </div>
 
@@ -687,6 +671,68 @@ const AssetInventory: React.FC = () => {
                     )}
                   </div>
                 </div>
+
+                {/* Technical Specs, Additional Specs & Dependencies (from metadata) */}
+                {a.metadata && Object.keys(a.metadata).length > 0 && (() => {
+                  const { additional_specs, relationships, ...topSpecs } = a.metadata as Record<string, any>;
+                  const isScalar = (v: any) => v !== null && v !== undefined && v !== '' && typeof v !== 'object';
+                  const topEntries  = Object.entries(topSpecs).filter(([, v]) => isScalar(v));
+                  const addlEntries = additional_specs
+                    ? Object.entries(additional_specs as Record<string, any>).filter(([, v]) => isScalar(v))
+                    : [];
+                  const relEntries  = relationships
+                    ? Object.entries(relationships as Record<string, string>).filter(([, v]) => v)
+                    : [];
+
+                  if (topEntries.length === 0 && addlEntries.length === 0 && relEntries.length === 0) return null;
+
+                  const SpecGrid = ({ entries }: { entries: [string, any][] }) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                      {entries.map(([key, value]) => (
+                        <div key={key}>
+                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                            {key.replace(/_/g, ' ')}
+                          </p>
+                          <div className="text-sm text-gray-900 break-all">{String(value)}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+
+                  return (
+                    <div className="space-y-4">
+                      {topEntries.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Technical Specs</h3>
+                          <SpecGrid entries={topEntries} />
+                        </div>
+                      )}
+                      {addlEntries.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">
+                            {topEntries.length > 0 ? 'Additional Specs' : 'Technical Specs'}
+                          </h3>
+                          <SpecGrid entries={addlEntries} />
+                        </div>
+                      )}
+                      {relEntries.length > 0 && (
+                        <div>
+                          <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">Dependencies</h3>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {relEntries.map(([key, value]) => (
+                              <div key={key} className="flex items-start gap-2">
+                                <span className="text-xs font-semibold text-gray-500 uppercase w-24 flex-shrink-0 pt-0.5">
+                                  {key.replace(/_/g, ' ')}
+                                </span>
+                                <span className="text-sm text-gray-800">{String(value)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Tags */}
                 {a.tags?.length > 0 && (

@@ -11,7 +11,7 @@ interface AssetContextType {
   addAsset: (asset: Omit<Asset, 'id' | 'lastUpdated'>) => Promise<void>;
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
-  uploadAssets: (file: File) => Promise<void>;
+  uploadAssets: (file: File, parsedData?: any[]) => Promise<void>;
   uploads: AssetUpload[];
   searchQuery: string;
   setSearchQuery: (query: string) => void;
@@ -149,7 +149,7 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const uploadAssets = async (file: File) => {
+  const uploadAssets = async (file: File, parsedData?: any[]) => {
     const orgId = getOrgId();
     console.log('Uploading assets for org_id:', orgId);
     
@@ -167,32 +167,76 @@ export const AssetProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       
       setUploads(prev => [...prev, upload]);
       
-      // Simulate file processing with progress updates
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-        await AssetUploadService.updateUploadProgress(uploadId, i, i === 100 ? 'completed' : 'processing');
+      // Process CSV data if provided
+      if (parsedData && parsedData.length > 0) {
+        const totalRows = parsedData.length;
+        const batchSize = Math.max(1, Math.floor(totalRows / 10)); // 10 progress updates
+        
+        let processedCount = 0;
+        const errors: string[] = [];
+        
+        // Process in batches for progress updates
+        for (let i = 0; i < parsedData.length; i += batchSize) {
+          const batch = parsedData.slice(i, i + batchSize);
+          
+          try {
+            const result = await AssetService.bulkCreateAssets(batch, orgId);
+            processedCount += result.inserted;
+            errors.push(...result.errors);
+          } catch (error) {
+            console.error('Error processing batch:', error);
+            errors.push(`Batch ${i}-${i + batchSize}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+          
+          // Update progress
+          const progress = Math.min(100, Math.round((i + batchSize) / totalRows * 100));
+          await AssetUploadService.updateUploadProgress(uploadId, progress, progress === 100 ? 'completed' : 'processing');
+          setUploads(prev => 
+            prev.map(u => u.file === file ? { ...u, progress, status: progress === 100 ? 'completed' : 'processing' } : u)
+          );
+        }
+        
+        // Update final results
+        await AssetUploadService.updateUploadResults(uploadId, totalRows, processedCount, errors.length, errors);
+        
         setUploads(prev => 
-          prev.map(u => u.file === file ? { ...u, progress: i, status: i === 100 ? 'completed' : 'processing' } : u)
+          prev.map(u => u.file === file ? { 
+            ...u, 
+            status: errors.length > 0 ? 'completed' : 'completed',
+            results: { 
+              total: totalRows, 
+              processed: processedCount, 
+              errors 
+            } 
+          } : u)
+        );
+      } else {
+        // Fallback to simulation if no data provided
+        for (let i = 0; i <= 100; i += 10) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          await AssetUploadService.updateUploadProgress(uploadId, i, i === 100 ? 'completed' : 'processing');
+          setUploads(prev => 
+            prev.map(u => u.file === file ? { ...u, progress: i, status: i === 100 ? 'completed' : 'processing' } : u)
+          );
+        }
+        
+        const processedCount = 2;
+        const errorCount = 0;
+        
+        await AssetUploadService.updateUploadResults(uploadId, processedCount, processedCount, errorCount, []);
+        
+        setUploads(prev => 
+          prev.map(u => u.file === file ? { 
+            ...u, 
+            status: 'completed',
+            results: { 
+              total: processedCount, 
+              processed: processedCount, 
+              errors: [] 
+            } 
+          } : u)
         );
       }
-      
-      // Simulate processing results
-      const processedCount = 2;
-      const errorCount = 0;
-      
-      await AssetUploadService.updateUploadResults(uploadId, processedCount, processedCount, errorCount, []);
-      
-      setUploads(prev => 
-        prev.map(u => u.file === file ? { 
-          ...u, 
-          status: 'completed',
-          results: { 
-            total: processedCount, 
-            processed: processedCount, 
-            errors: [] 
-          } 
-        } : u)
-      );
       
       // Refresh assets to show newly uploaded ones
       await refreshAssets();

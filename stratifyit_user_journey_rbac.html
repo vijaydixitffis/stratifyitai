@@ -1,0 +1,577 @@
+
+<style>
+h2.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans,sans-serif);color:var(--text-primary)}
+.wrap{padding:1.5rem 0}
+.phase-nav{display:flex;gap:8px;margin-bottom:1.5rem;flex-wrap:wrap}
+.phase-btn{padding:8px 18px;border-radius:var(--radius,8px);border:0.5px solid var(--border-strong);background:var(--surface-1);color:var(--text-secondary);font-size:13px;cursor:pointer;transition:all .15s;font-weight:400}
+.phase-btn.active{background:var(--fill-accent);color:var(--on-accent);border-color:var(--fill-accent);font-weight:500}
+.phase-btn:hover:not(.active){background:var(--surface-2);color:var(--text-primary)}
+
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:1.25rem;padding:12px 14px;background:var(--surface-1);border-radius:var(--radius);border:0.5px solid var(--border)}
+.leg-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-secondary)}
+.leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
+.phase-header{padding:14px 16px;border-radius:var(--radius);margin-bottom:1rem;border:0.5px solid var(--border)}
+.phase-title{font-size:15px;font-weight:500;margin-bottom:2px}
+.phase-sub{font-size:12px;color:var(--text-secondary)}
+
+.roles-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:1.25rem}
+.role-card{background:var(--surface-1);border:0.5px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.role-header{padding:10px 12px;display:flex;align-items:center;gap:8px}
+.role-badge{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;flex-shrink:0}
+.role-name{font-size:13px;font-weight:500}
+.role-org{font-size:11px;color:var(--text-muted)}
+.role-actions{padding:0 12px 12px}
+.action-item{font-size:12px;color:var(--text-secondary);padding:3px 0;display:flex;align-items:flex-start;gap:6px;line-height:1.4}
+.action-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0;margin-top:5px}
+.action-item.blocked{color:var(--text-muted);opacity:.55}
+.action-item.blocked .action-dot{background:var(--border-strong)!important}
+
+.features-section{margin-bottom:1.25rem}
+.feat-label{font-size:12px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.features-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px}
+.feat-chip{padding:6px 10px;border-radius:6px;font-size:12px;border:0.5px solid var(--border);background:var(--surface-1)}
+.feat-chip .feat-name{font-weight:500;color:var(--text-primary);display:block;margin-bottom:3px}
+.feat-chip .feat-who{color:var(--text-muted);font-size:11px}
+
+.flow-section{background:var(--surface-1);border-radius:var(--radius);border:0.5px solid var(--border);padding:14px 16px;margin-bottom:1.25rem}
+.flow-label{font-size:12px;font-weight:500;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px}
+.flow-steps{display:flex;gap:0;flex-wrap:wrap;align-items:stretch}
+.flow-step{flex:1;min-width:120px;padding:8px 10px;border-radius:6px;position:relative}
+.flow-step:not(:last-child)::after{content:'→';position:absolute;right:-8px;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:12px;z-index:1}
+.flow-step-title{font-size:12px;font-weight:500;margin-bottom:2px}
+.flow-step-who{font-size:11px;color:var(--text-muted)}
+
+.handoff-section{background:var(--bg-accent);border:0.5px solid var(--border-accent);border-radius:var(--radius);padding:12px 14px;margin-bottom:1.25rem}
+.handoff-label{font-size:12px;font-weight:500;color:var(--text-accent);margin-bottom:6px}
+.handoff-text{font-size:12px;color:var(--text-secondary);line-height:1.6}
+
+.rbac-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:.5rem}
+.rbac-table th{text-align:left;padding:8px 10px;background:var(--surface-1);font-weight:500;color:var(--text-secondary);border-bottom:0.5px solid var(--border)}
+.rbac-table td{padding:7px 10px;border-bottom:0.5px solid var(--border);vertical-align:top;color:var(--text-primary)}
+.rbac-table tr:last-child td{border-bottom:none}
+.rbac-table tr:hover td{background:var(--surface-1)}
+.pill{display:inline-flex;align-items:center;padding:2px 7px;border-radius:10px;font-size:11px;gap:3px;margin:1px}
+.pill-green{background:var(--bg-success);color:var(--text-success);border:0.5px solid var(--border-success)}
+.pill-red{background:var(--bg-danger);color:var(--text-danger);border:0.5px solid var(--border-danger)}
+.pill-amber{background:var(--bg-warning);color:var(--text-warning);border:0.5px solid var(--border-warning)}
+.section-toggle{display:flex;align-items:center;gap:8px;margin-bottom:1rem}
+.sec-btn{padding:5px 12px;border-radius:6px;border:0.5px solid var(--border);background:var(--surface-1);color:var(--text-secondary);font-size:12px;cursor:pointer}
+.sec-btn.active{background:var(--surface-2);color:var(--text-primary);border-color:var(--border-strong);font-weight:500}
+
+.overall-flow{display:flex;align-items:center;gap:0;margin-bottom:1.5rem;overflow-x:auto;padding-bottom:4px}
+.of-phase{flex:1;min-width:140px;padding:12px 14px;border-radius:var(--radius);border:0.5px solid var(--border);cursor:pointer;transition:all .15s}
+.of-phase.active{transform:translateY(-2px)}
+.of-arrow{padding:0 6px;color:var(--text-muted);font-size:14px;flex-shrink:0}
+.of-phase-num{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.of-phase-name{font-size:13px;font-weight:500;margin-bottom:3px}
+.of-phase-sub{font-size:11px;color:var(--text-secondary)}
+.of-phase-inputs{display:flex;flex-wrap:wrap;gap:3px;margin-top:6px}
+.of-input-tag{font-size:10px;padding:2px 6px;border-radius:4px;background:var(--surface-1);border:0.5px solid var(--border);color:var(--text-muted)}
+</style>
+
+<h2 class="sr-only">StratifyIT user journey and RBAC mapping across the three-phase rationalization process</h2>
+
+<div class="wrap">
+
+<div style="margin-bottom:1.25rem">
+  <div style="font-size:18px;font-weight:500;margin-bottom:4px">User journey & RBAC — StratifyIT</div>
+  <div style="font-size:13px;color:var(--text-secondary)">3-phase IT rationalization: Discover → Analyze → Recommend & Transform</div>
+</div>
+
+<div class="legend">
+  <div class="leg-item"><div class="leg-dot" style="background:#185FA5"></div>Admin consultant (StratifyIT)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#0F6E56"></div>Admin architect (StratifyIT)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#993C1D"></div>Client CXO</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#854F0B"></div>Client manager</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#533AB7"></div>Client architect</div>
+</div>
+
+<div class="overall-flow" id="overallFlow">
+  <div class="of-phase active" id="of0" style="background:var(--bg-accent);border-color:var(--border-accent)" onclick="selectPhase(0)">
+    <div class="of-phase-num" style="color:var(--text-accent)">Phase 1</div>
+    <div class="of-phase-name">Discover</div>
+    <div class="of-phase-sub">Data ingestion</div>
+    <div class="of-phase-inputs">
+      <span class="of-input-tag">Asset inventory</span>
+      <span class="of-input-tag">Biz capabilities</span>
+      <span class="of-input-tag">AI readiness</span>
+    </div>
+  </div>
+  <div class="of-arrow">→</div>
+  <div class="of-phase" id="of1" onclick="selectPhase(1)">
+    <div class="of-phase-num" style="color:var(--text-muted)">Phase 2</div>
+    <div class="of-phase-name">Analyze</div>
+    <div class="of-phase-sub">AI review</div>
+    <div class="of-phase-inputs">
+      <span class="of-input-tag">Asset scoring</span>
+      <span class="of-input-tag">Capability gaps</span>
+      <span class="of-input-tag">Risk mapping</span>
+    </div>
+  </div>
+  <div class="of-arrow">→</div>
+  <div class="of-phase" id="of2" onclick="selectPhase(2)">
+    <div class="of-phase-num" style="color:var(--text-muted)">Phase 3</div>
+    <div class="of-phase-name">Recommend & Transform</div>
+    <div class="of-phase-sub">Reports & roadmap</div>
+    <div class="of-phase-inputs">
+      <span class="of-input-tag">6R dispositions</span>
+      <span class="of-input-tag">Architecture</span>
+      <span class="of-input-tag">Roadmap</span>
+    </div>
+  </div>
+</div>
+
+<div class="section-toggle">
+  <span style="font-size:12px;color:var(--text-muted)">View:</span>
+  <button class="sec-btn active" onclick="setView('roles')">Roles & actions</button>
+  <button class="sec-btn" onclick="setView('flow')">Step-by-step flow</button>
+  <button class="sec-btn" onclick="setView('rbac')">RBAC feature map</button>
+</div>
+
+<div id="view-roles">
+<div id="phase-content"></div>
+</div>
+
+<div id="view-flow" style="display:none">
+<div id="flow-content"></div>
+</div>
+
+<div id="view-rbac" style="display:none">
+<div id="rbac-content"></div>
+</div>
+
+</div>
+
+<script>
+const ROLES = [
+  {id:'admin-consultant', label:'Admin consultant', org:'StratifyIT', color:'#185FA5', bg:'#E6F1FB'},
+  {id:'admin-architect', label:'Admin architect', org:'StratifyIT', color:'#0F6E56', bg:'#E1F5EE'},
+  {id:'client-cxo', label:'Client CXO', org:'Client org', color:'#993C1D', bg:'#FAECE7'},
+  {id:'client-manager', label:'Client manager', org:'Client org', color:'#854F0B', bg:'#FAEEDA'},
+  {id:'client-architect', label:'Client architect', org:'Client org', color:'#533AB7', bg:'#EEEDFE'},
+];
+
+const PHASES = [
+  {
+    id:0,
+    name:'Discover',
+    subtitle:'Asset inventory · Business capabilities · AI readiness assessments',
+    color:'var(--bg-accent)',
+    borderColor:'var(--border-accent)',
+    titleColor:'var(--text-accent)',
+    handoff:'Phase 1 is complete when: all asset records are ingested and validated, business capability model is mapped, and AI readiness questionnaires are submitted. Admin architect signs off before triggering AI analysis.',
+    roles: {
+      'admin-consultant': {
+        actions: [
+          {text:'Onboard client org & provision users', blocked:false},
+          {text:'Set up org profile, sector, and priorities', blocked:false},
+          {text:'Define assessment scope with client CXO', blocked:false},
+          {text:'Monitor overall ingestion progress', blocked:false},
+          {text:'Approve data completeness before Phase 2', blocked:false},
+        ]
+      },
+      'admin-architect': {
+        actions: [
+          {text:'Configure assessment templates', blocked:false},
+          {text:'Validate uploaded asset CSV/Excel for schema', blocked:false},
+          {text:'Review capability model structure', blocked:false},
+          {text:'Trigger AI readiness assessment for client', blocked:false},
+          {text:'Quality-gate: approve data before Analyze phase', blocked:false},
+        ]
+      },
+      'client-cxo': {
+        actions: [
+          {text:'Provide strategic context & business priorities', blocked:false},
+          {text:'Approve capability model scope (L1–L3)', blocked:false},
+          {text:'View dashboard summary of ingestion status', blocked:false},
+          {text:'Cannot upload or edit assets directly', blocked:true},
+          {text:'Cannot configure assessments', blocked:true},
+        ]
+      },
+      'client-manager': {
+        actions: [
+          {text:'Upload asset inventory (CSV/Excel bulk)', blocked:false},
+          {text:'Add/edit individual assets in UI', blocked:false},
+          {text:'Assign asset owners, tags, criticality', blocked:false},
+          {text:'Fill in business capability questionnaire', blocked:false},
+          {text:'Invite client architect to assess assets', blocked:false},
+        ]
+      },
+      'client-architect': {
+        actions: [
+          {text:'Complete application modernization assessment per asset', blocked:false},
+          {text:'Complete database architecture assessment', blocked:false},
+          {text:'Complete AI readiness assessment topics', blocked:false},
+          {text:'Tag assets with tech stack, integrations, EOL', blocked:false},
+          {text:'Cannot create or delete other users', blocked:true},
+        ]
+      },
+    },
+    flow:[
+      {step:'Org onboarded',who:'Admin consultant',color:'#185FA5'},
+      {step:'Users provisioned',who:'Admin consultant',color:'#185FA5'},
+      {step:'Asset bulk upload',who:'Client manager',color:'#854F0B'},
+      {step:'Asset detail entry',who:'Client architect',color:'#533AB7'},
+      {step:'Capability mapping',who:'Client manager + CXO',color:'#993C1D'},
+      {step:'AI readiness survey',who:'Client architect',color:'#533AB7'},
+      {step:'Data quality gate',who:'Admin architect',color:'#0F6E56'},
+    ],
+    features:[
+      {name:'Org onboarding form',who:'Admin consultant'},
+      {name:'User provisioning',who:'Admin consultant'},
+      {name:'Asset inventory upload (CSV/Excel)',who:'Client manager'},
+      {name:'Asset add/edit form',who:'Client manager, Client architect'},
+      {name:'Asset tagging & criticality',who:'Client manager, Client architect'},
+      {name:'Business capability questionnaire',who:'Client manager, Client CXO'},
+      {name:'AI readiness assessment',who:'Client architect'},
+      {name:'App modernization assessment',who:'Client architect'},
+      {name:'Database architecture assessment',who:'Client architect'},
+      {name:'Ingestion dashboard',who:'Admin consultant (all), Client manager (own org)'},
+      {name:'Assessment template config',who:'Admin architect only'},
+    ]
+  },
+  {
+    id:1,
+    name:'Analyze',
+    subtitle:'AI review of assets · Capability gap analysis · Risk & dependency mapping',
+    color:'var(--bg-success)',
+    borderColor:'var(--border-success)',
+    titleColor:'var(--text-success)',
+    handoff:'Phase 2 is complete when: all assets have AI-generated scores, capability gaps are confirmed, and the admin architect has reviewed and validated the analysis output before publishing scorecards.',
+    roles: {
+      'admin-consultant': {
+        actions: [
+          {text:'Trigger AI analysis pipeline per client org', blocked:false},
+          {text:'Monitor analysis job status & errors', blocked:false},
+          {text:'Review high-level score distribution', blocked:false},
+          {text:'Escalate anomalies to admin architect', blocked:false},
+          {text:'Cannot edit AI-generated scores directly', blocked:true},
+        ]
+      },
+      'admin-architect': {
+        actions: [
+          {text:'Review and validate AI-generated asset scores', blocked:false},
+          {text:'Override or annotate specific scores with rationale', blocked:false},
+          {text:'Map assets to business capabilities', blocked:false},
+          {text:'Identify dependency clusters and risk zones', blocked:false},
+          {text:'Publish validated analysis to client view', blocked:false},
+        ]
+      },
+      'client-cxo': {
+        actions: [
+          {text:'View high-level portfolio health dashboard', blocked:false},
+          {text:'See capability coverage heatmap', blocked:false},
+          {text:'Cannot see individual raw scores until published', blocked:true},
+          {text:'Cannot trigger or modify analysis', blocked:true},
+        ]
+      },
+      'client-manager': {
+        actions: [
+          {text:'View analysis progress dashboard', blocked:false},
+          {text:'See draft asset scores (read-only) once published', blocked:false},
+          {text:'Respond to admin queries about specific assets', blocked:false},
+          {text:'Cannot approve or override scores', blocked:true},
+        ]
+      },
+      'client-architect': {
+        actions: [
+          {text:'Review AI-generated scores for assigned assets', blocked:false},
+          {text:'Provide clarification/additional context on assets', blocked:false},
+          {text:'Flag assets needing manual review', blocked:false},
+          {text:'Cannot override scores or publish analysis', blocked:true},
+        ]
+      },
+    },
+    flow:[
+      {step:'AI pipeline triggered',who:'Admin consultant',color:'#185FA5'},
+      {step:'Asset scoring runs',who:'System (AI)',color:'#888'},
+      {step:'Capability gap mapped',who:'Admin architect',color:'#0F6E56'},
+      {step:'Client flags anomalies',who:'Client architect',color:'#533AB7'},
+      {step:'Score override/annotate',who:'Admin architect',color:'#0F6E56'},
+      {step:'Analysis published',who:'Admin architect',color:'#0F6E56'},
+    ],
+    features:[
+      {name:'AI analysis trigger',who:'Admin consultant'},
+      {name:'Job status monitor',who:'Admin consultant, Admin architect'},
+      {name:'Asset score viewer',who:'Admin architect (edit), Client roles (read)'},
+      {name:'Score override panel',who:'Admin architect only'},
+      {name:'Capability-to-asset mapping view',who:'Admin architect'},
+      {name:'Portfolio health dashboard',who:'All roles (scope varies)'},
+      {name:'Dependency cluster diagram',who:'Admin architect, Client architect'},
+      {name:'Risk zone heatmap',who:'Admin architect, Client CXO'},
+      {name:'Client annotation/flagging',who:'Client architect'},
+      {name:'Publish analysis gate',who:'Admin architect only'},
+    ]
+  },
+  {
+    id:2,
+    name:'Recommend & Transform',
+    subtitle:'Summary report · Asset scorecards · 6R rationalization · Current & target architectures · Technology roadmap',
+    color:'var(--bg-warning)',
+    borderColor:'var(--border-warning)',
+    titleColor:'var(--text-warning)',
+    handoff:'Phase 3 is complete when: the rationalization report with 6R dispositions is reviewed and accepted by the client CXO, and the technology roadmap (short/medium/long term) is approved for execution.',
+    roles: {
+      'admin-consultant': {
+        actions: [
+          {text:'Generate and package summary report for client', blocked:false},
+          {text:'Present findings to client stakeholders', blocked:false},
+          {text:'Manage report versioning and sharing', blocked:false},
+          {text:'Coordinate roadmap initiative prioritization', blocked:false},
+          {text:'Export deliverables (PDF, PPTX)', blocked:false},
+        ]
+      },
+      'admin-architect': {
+        actions: [
+          {text:'Define 6R dispositions per asset (Retain/Retire/Rehost/Replatform/Refactor/Replace)', blocked:false},
+          {text:'Author current state & target state architectures', blocked:false},
+          {text:'Design technology roadmap (short/medium/long term)', blocked:false},
+          {text:'Create per-asset scorecards with rationale', blocked:false},
+          {text:'Review and approve final deliverable package', blocked:false},
+        ]
+      },
+      'client-cxo': {
+        actions: [
+          {text:'Review executive summary report', blocked:false},
+          {text:'Approve or reject 6R disposition recommendations', blocked:false},
+          {text:'Sign off on technology roadmap initiatives', blocked:false},
+          {text:'Request revisions on strategic recommendations', blocked:false},
+          {text:'Cannot author or edit architecture artifacts', blocked:true},
+        ]
+      },
+      'client-manager': {
+        actions: [
+          {text:'Review asset scorecards for managed assets', blocked:false},
+          {text:'View rationalization report (read-only)', blocked:false},
+          {text:'Provide feedback on feasibility of initiatives', blocked:false},
+          {text:'Track roadmap initiative status', blocked:false},
+          {text:'Cannot create or modify deliverable content', blocked:true},
+        ]
+      },
+      'client-architect': {
+        actions: [
+          {text:'Review technical details in asset scorecards', blocked:false},
+          {text:'Validate current state architecture diagrams', blocked:false},
+          {text:'Comment on target state architecture gaps', blocked:false},
+          {text:'Review short-term roadmap initiatives', blocked:false},
+          {text:'Cannot set 6R dispositions or author architecture', blocked:true},
+        ]
+      },
+    },
+    flow:[
+      {step:'Scorecards generated',who:'Admin architect',color:'#0F6E56'},
+      {step:'6R dispositions set',who:'Admin architect',color:'#0F6E56'},
+      {step:'Current → target arch',who:'Admin architect',color:'#0F6E56'},
+      {step:'Roadmap authored',who:'Admin architect',color:'#0F6E56'},
+      {step:'Report packaged',who:'Admin consultant',color:'#185FA5'},
+      {step:'CXO review',who:'Client CXO',color:'#993C1D'},
+      {step:'CXO sign-off',who:'Client CXO',color:'#993C1D'},
+    ],
+    features:[
+      {name:'Asset scorecards',who:'Admin architect (author), Client roles (read)'},
+      {name:'6R disposition assignment',who:'Admin architect only'},
+      {name:'Rationalization report',who:'Admin architect (author), all (read)'},
+      {name:'Current state architecture',who:'Admin architect (author), Client architect (review)'},
+      {name:'Target state architecture',who:'Admin architect (author), Client architect (review)'},
+      {name:'Technology roadmap (S/M/L)',who:'Admin architect (author), all (read)'},
+      {name:'Executive summary report',who:'Admin consultant (package), Client CXO (approve)'},
+      {name:'Report version management',who:'Admin consultant'},
+      {name:'Export (PDF/PPTX)',who:'Admin consultant, Client manager'},
+      {name:'CXO approval workflow',who:'Client CXO (action), Admin consultant (track)'},
+      {name:'Feedback & revision requests',who:'Client CXO, Client manager, Client architect'},
+    ]
+  }
+];
+
+const RBAC = [
+  {feature:'Org onboarding & user provisioning', 'admin-consultant':'✅ Full', 'admin-architect':'✅ Full', 'client-cxo':'—', 'client-manager':'—', 'client-architect':'—'},
+  {feature:'Asset upload (CSV/Excel)', 'admin-consultant':'✅ All orgs', 'admin-architect':'✅ All orgs', 'client-cxo':'🚫 None', 'client-manager':'✅ Own org', 'client-architect':'✅ Own org'},
+  {feature:'Asset add/edit (form)', 'admin-consultant':'✅ All orgs', 'admin-architect':'✅ All orgs', 'client-cxo':'🚫 None', 'client-manager':'✅ Own org', 'client-architect':'✅ Own org'},
+  {feature:'Assessment questionnaires', 'admin-consultant':'✅ Configure', 'admin-architect':'✅ Configure', 'client-cxo':'⚠️ Strategic only', 'client-manager':'✅ Biz capab.', 'client-architect':'✅ Tech assess.'},
+  {feature:'AI analysis trigger', 'admin-consultant':'✅ Trigger', 'admin-architect':'✅ Trigger', 'client-cxo':'🚫 None', 'client-manager':'🚫 None', 'client-architect':'🚫 None'},
+  {feature:'Asset score view', 'admin-consultant':'✅ All', 'admin-architect':'✅ All + edit', 'client-cxo':'⚠️ Summary only', 'client-manager':'✅ Published', 'client-architect':'✅ Own assets'},
+  {feature:'Score override/annotate', 'admin-consultant':'🚫 None', 'admin-architect':'✅ Full', 'client-cxo':'🚫 None', 'client-manager':'🚫 None', 'client-architect':'⚠️ Flag only'},
+  {feature:'6R disposition assignment', 'admin-consultant':'🚫 None', 'admin-architect':'✅ Full', 'client-cxo':'⚠️ Approve/reject', 'client-manager':'🚫 None', 'client-architect':'🚫 None'},
+  {feature:'Architecture authoring (current/target)', 'admin-consultant':'🚫 None', 'admin-architect':'✅ Full', 'client-cxo':'🚫 None', 'client-manager':'🚫 None', 'client-architect':'⚠️ Review/comment'},
+  {feature:'Technology roadmap authoring', 'admin-consultant':'🚫 None', 'admin-architect':'✅ Full', 'client-cxo':'⚠️ Approve', 'client-manager':'⚠️ View + feedback', 'client-architect':'⚠️ View (short-term)'},
+  {feature:'Report generation & packaging', 'admin-consultant':'✅ Full', 'admin-architect':'✅ Full', 'client-cxo':'🚫 None', 'client-manager':'⚠️ View only', 'client-architect':'⚠️ View only'},
+  {feature:'Export (PDF/PPTX)', 'admin-consultant':'✅ All', 'admin-architect':'✅ All', 'client-cxo':'✅ Own', 'client-manager':'✅ Own', 'client-architect':'⚠️ Limited'},
+  {feature:'Client management (create/delete users)', 'admin-consultant':'✅ Full', 'admin-architect':'⚠️ View only', 'client-cxo':'🚫 None', 'client-manager':'🚫 None', 'client-architect':'🚫 None'},
+  {feature:'Dashboard (portfolio insights)', 'admin-consultant':'✅ All orgs', 'admin-architect':'✅ All orgs', 'client-cxo':'✅ Exec view', 'client-manager':'✅ Ops view', 'client-architect':'✅ Tech view'},
+  {feature:'Reports list & history', 'admin-consultant':'✅ All', 'admin-architect':'✅ All', 'client-cxo':'✅ Own org', 'client-manager':'✅ Own org', 'client-architect':'✅ Own org'},
+  {feature:'Settings & system config', 'admin-consultant':'✅ Full', 'admin-architect':'⚠️ Assessment config', 'client-cxo':'🚫 None', 'client-manager':'🚫 None', 'client-architect':'🚫 None'},
+];
+
+let currentPhase = 0;
+let currentView = 'roles';
+
+function selectPhase(idx){
+  currentPhase = idx;
+  for(let i=0;i<3;i++){
+    const el = document.getElementById('of'+i);
+    const p = PHASES[i];
+    if(i===idx){
+      el.style.background=p.color;
+      el.style.borderColor=p.borderColor;
+      el.querySelector('.of-phase-num').style.color=p.titleColor;
+      el.classList.add('active');
+    } else {
+      el.style.background='var(--surface-1)';
+      el.style.borderColor='var(--border)';
+      el.querySelector('.of-phase-num').style.color='var(--text-muted)';
+      el.classList.remove('active');
+    }
+  }
+  renderCurrentView();
+}
+
+function setView(v){
+  currentView = v;
+  document.querySelectorAll('.sec-btn').forEach((b,i)=>{
+    const views = ['roles','flow','rbac'];
+    b.classList.toggle('active', views[i]===v);
+  });
+  document.getElementById('view-roles').style.display = v==='roles'?'block':'none';
+  document.getElementById('view-flow').style.display = v==='flow'?'block':'none';
+  document.getElementById('view-rbac').style.display = v==='rbac'?'block':'none';
+  renderCurrentView();
+}
+
+function renderCurrentView(){
+  if(currentView==='roles') renderRoles();
+  else if(currentView==='flow') renderFlow();
+  else renderRBAC();
+}
+
+function renderRoles(){
+  const p = PHASES[currentPhase];
+  let html = `<div class="phase-header" style="background:${p.color};border-color:${p.borderColor}">
+    <div class="phase-title" style="color:${p.titleColor}">Phase ${currentPhase+1}: ${p.name}</div>
+    <div class="phase-sub">${p.subtitle}</div>
+  </div>`;
+
+  html += `<div class="roles-grid">`;
+  ROLES.forEach(role => {
+    const roleData = p.roles[role.id];
+    html += `<div class="role-card">
+      <div class="role-header">
+        <div class="role-badge" style="background:${role.bg};color:${role.color}">${role.label.substring(0,2).toUpperCase()}</div>
+        <div>
+          <div class="role-name">${role.label}</div>
+          <div class="role-org">${role.org}</div>
+        </div>
+      </div>
+      <div class="role-actions">`;
+    roleData.actions.forEach(a => {
+      html += `<div class="action-item ${a.blocked?'blocked':''}">
+        <div class="action-dot" style="background:${a.blocked?'':role.color}"></div>
+        <span>${a.text}</span>
+      </div>`;
+    });
+    html += `</div></div>`;
+  });
+  html += `</div>`;
+
+  html += `<div class="features-section">
+    <div class="feat-label">Features unlocked this phase</div>
+    <div class="features-grid">`;
+  p.features.forEach(f => {
+    html += `<div class="feat-chip"><span class="feat-name">${f.name}</span><span class="feat-who">${f.who}</span></div>`;
+  });
+  html += `</div></div>`;
+
+  html += `<div class="handoff-section">
+    <div class="handoff-label">Phase gate / handoff criteria</div>
+    <div class="handoff-text">${p.handoff}</div>
+  </div>`;
+
+  document.getElementById('phase-content').innerHTML = html;
+}
+
+function renderFlow(){
+  const p = PHASES[currentPhase];
+  let html = `<div class="phase-header" style="background:${p.color};border-color:${p.borderColor}">
+    <div class="phase-title" style="color:${p.titleColor}">Phase ${currentPhase+1}: ${p.name} — step-by-step flow</div>
+    <div class="phase-sub">Who initiates each action and hands off to whom</div>
+  </div>
+  <div class="flow-section">
+    <div class="flow-label">Sequential steps</div>
+    <div class="flow-steps">`;
+  p.flow.forEach((s,i) => {
+    const isLast = i === p.flow.length-1;
+    html += `<div class="flow-step" style="background:${s.color}18;border:0.5px solid ${s.color}44${isLast?';border-color:'+s.color:''}">
+      <div class="flow-step-title" style="color:${s.color}">${s.step}</div>
+      <div class="flow-step-who">${s.who}</div>
+    </div>`;
+    if(!isLast) html += `<div style="display:flex;align-items:center;padding:0 2px;color:var(--text-muted);font-size:11px">→</div>`;
+  });
+  html += `</div></div>`;
+
+  html += `<div style="background:var(--surface-1);border:0.5px solid var(--border);border-radius:var(--radius);padding:14px 16px">
+    <div class="flow-label" style="margin-bottom:12px">Collaboration pattern this phase</div>`;
+
+  const patterns = [
+    ['StratifyIT drives setup, clients provide data','Admin roles configure the environment and guide clients through structured data entry. Handoff is admin architect validating completeness.'],
+    ['StratifyIT AI engine scores, clients validate context','System runs autonomously; admin architect curates outputs; client architect provides domain context. No client can alter scores.'],
+    ['StratifyIT architects deliver, clients review and approve','Admin architect is the sole author of all deliverables. Client CXO holds approval authority. Admin consultant manages the client relationship throughout.']
+  ];
+  const pat = patterns[currentPhase];
+  html += `<div style="font-size:13px;font-weight:500;margin-bottom:6px">${pat[0]}</div>
+    <div style="font-size:12px;color:var(--text-secondary);line-height:1.6">${pat[1]}</div>`;
+  html += `</div>`;
+
+  document.getElementById('flow-content').innerHTML = html;
+}
+
+function renderRBAC(){
+  const colHeaders = ['Feature / capability','Admin consultant','Admin architect','Client CXO','Client manager','Client architect'];
+  const colKeys = ['feature','admin-consultant','admin-architect','client-cxo','client-manager','client-architect'];
+  const roleColors = {'admin-consultant':'#185FA5','admin-architect':'#0F6E56','client-cxo':'#993C1D','client-manager':'#854F0B','client-architect':'#533AB7'};
+
+  let html = `<div style="overflow-x:auto"><table class="rbac-table">
+    <thead><tr>`;
+  colHeaders.forEach((h,i) => {
+    const key = colKeys[i];
+    const col = roleColors[key] || null;
+    html += `<th style="${col?'border-bottom:2px solid '+col+'44':''}font-size:12px">${h}</th>`;
+  });
+  html += `</tr></thead><tbody>`;
+  RBAC.forEach(row => {
+    html += `<tr>`;
+    colKeys.forEach((k,i) => {
+      const val = row[k] || '—';
+      let cls = '';
+      let pillCls = '';
+      if(val.startsWith('✅')) pillCls='pill-green';
+      else if(val.startsWith('🚫')) pillCls='pill-red';
+      else if(val.startsWith('⚠️')) pillCls='pill-amber';
+      if(i===0){
+        html += `<td style="font-size:12px;font-weight:500">${val}</td>`;
+      } else {
+        const icon = val.startsWith('✅')?'✅':val.startsWith('🚫')?'🚫':val.startsWith('⚠️')?'⚠️':'';
+        const text = val.replace('✅','').replace('🚫','').replace('⚠️','').trim();
+        if(pillCls){
+          html += `<td><span class="pill ${pillCls}">${icon} ${text||'—'}</span></td>`;
+        } else {
+          html += `<td style="color:var(--text-muted);font-size:12px">—</td>`;
+        }
+      }
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table></div>`;
+
+  html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:11px">
+    <span class="pill pill-green">✅ Full / allowed access</span>
+    <span class="pill pill-amber">⚠️ Partial / conditional access</span>
+    <span class="pill pill-red">🚫 No access</span>
+  </div>`;
+
+  document.getElementById('rbac-content').innerHTML = html;
+}
+
+renderRoles();
+</script>
