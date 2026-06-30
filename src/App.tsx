@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AssetProvider } from './contexts/AssetContext';
 import { PhaseProvider } from './contexts/PhaseContext';
@@ -13,13 +13,13 @@ import LandscapeLanding from './components/landscape/LandscapeLanding';
 import CapabilityMapper from './components/landscape/CapabilityMapper';
 import LandscapeGate from './components/landscape/LandscapeGate';
 import IntelligencePlaceholder from './components/intelligence/IntelligencePlaceholder';
-import AIAnalysisPlaceholder from './components/intelligence/AIAnalysisPlaceholder';
-import GapAssessmentPlaceholder from './components/intelligence/GapAssessmentPlaceholder';
-import RAIDLogPlaceholder from './components/intelligence/RAIDLogPlaceholder';
+import StrategyInsightsView from './components/intelligence/StrategyInsightsView';
+import RationalizationTIMEView from './components/intelligence/RationalizationTIMEView';
+import RiskRegisterView from './components/intelligence/RiskRegisterView';
 import WayForwardPlaceholder from './components/wayforward/WayForwardPlaceholder';
-import ScorecardsPlaceholder from './components/wayforward/ScorecardsPlaceholder';
-import HeatmapsPlaceholder from './components/wayforward/HeatmapsPlaceholder';
-import RoadmapPlaceholder from './components/wayforward/RoadmapPlaceholder';
+import DispositionPanel from './components/wayforward/DispositionPanel';
+import PortfolioHeatmapsView from './components/wayforward/PortfolioHeatmapsView';
+import RoadmapKanban from './components/wayforward/RoadmapKanban';
 import { Loader2 } from 'lucide-react';
 import { SelectedOrgProvider, useSelectedOrg } from './contexts/SelectedOrgContext';
 import { OrganizationService, Organization } from './services/organizationService';
@@ -32,6 +32,7 @@ const AppContent: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [activeSubTab, setActiveSubTab] = useState('');
+  const prevUserIdRef = useRef<string | undefined>(undefined);
   const [showOnboardOrgForm, setShowOnboardOrgForm] = useState(false);
   const [orgOnboarded, setOrgOnboarded] = useState<null | { org: any; user: any }>(null);
   const [orgs, setOrgs] = useState<Organization[]>([]);
@@ -57,6 +58,15 @@ const AppContent: React.FC = () => {
       setSelectedOrg(null);
     }
   }, [user, isInitialized]);
+
+  // Reset to dashboard whenever a login occurs (user id changes from absent → present)
+  useEffect(() => {
+    if (user && user.id !== prevUserIdRef.current) {
+      setActiveTab('dashboard');
+      setActiveSubTab('');
+    }
+    prevUserIdRef.current = user?.id;
+  }, [user?.id]);
 
   if (!user && isInitialized) return <LoginForm />;
 
@@ -103,10 +113,10 @@ const AppContent: React.FC = () => {
   const renderIntelligenceContent = (sub: string) => {
     if (!canAccessPhase(2)) return <IntelligencePlaceholder onNavigate={handleTabChange} />;
     switch (sub) {
-      case 'analysis': return <AIAnalysisPlaceholder />;
-      case 'gaps':     return <GapAssessmentPlaceholder />;
-      case 'raids':    return <RAIDLogPlaceholder />;
-      default:         return <IntelligencePlaceholder onNavigate={handleTabChange} />;
+      case 'analysis':        return <StrategyInsightsView />;
+      case 'rationalization': return <RationalizationTIMEView />;
+      case 'raids':           return <RiskRegisterView />;
+      default:                return <StrategyInsightsView />;
     }
   };
 
@@ -114,10 +124,10 @@ const AppContent: React.FC = () => {
   const renderWayForwardContent = (sub: string) => {
     if (!canAccessPhase(3)) return <WayForwardPlaceholder onNavigate={handleTabChange} />;
     switch (sub) {
-      case 'scorecards': return <ScorecardsPlaceholder />;
-      case 'heatmaps':   return <HeatmapsPlaceholder />;
-      case 'roadmap':    return <RoadmapPlaceholder />;
-      default:           return <WayForwardPlaceholder onNavigate={handleTabChange} />;
+      case 'scorecards': return <DispositionPanel />;
+      case 'heatmaps':   return <PortfolioHeatmapsView />;
+      case 'roadmap':    return <RoadmapKanban />;
+      default:           return <DispositionPanel />;
     }
   };
 

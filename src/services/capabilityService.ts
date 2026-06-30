@@ -299,8 +299,41 @@ export async function getAssetMappingSuggestions(
   capabilities: FlatCapability[],
   assets: { id: string; name: string; type: string; description: string; tags: string[]; category: string }[],
 ): Promise<{ mappings: MappingSuggestion[] }> {
-  const result = await callCapabilitiesFunction({ action: 'map_assets', capabilities, assets }) as any;
-  return result;
+  // Replace UUIDs with short sequential IDs so the LLM reliably echoes them back.
+  const capIdMap = new Map<string, string>(); // shortId → real UUID
+  const assetIdMap = new Map<string, string>();
+
+  const simpleCaps = capabilities.map((c, i) => {
+    const sid = `c${i + 1}`;
+    capIdMap.set(sid, c.id);
+    return { ...c, id: sid };
+  });
+
+  const simpleAssets = assets.map((a, i) => {
+    const sid = `a${i + 1}`;
+    assetIdMap.set(sid, a.id);
+    return { ...a, id: sid };
+  });
+
+  const result = await callCapabilitiesFunction({ action: 'map_assets', capabilities: simpleCaps, assets: simpleAssets }) as any;
+
+  // Translate short IDs back to real UUIDs; drop any the LLM hallucinated.
+  const mappings: MappingSuggestion[] = (result.mappings ?? [])
+    .map((m: any) => {
+      const realCapId = capIdMap.get(m.capability_id);
+      if (!realCapId) return null;
+      const supporting_assets = (m.supporting_assets ?? [])
+        .map((a: any) => {
+          const realAssetId = assetIdMap.get(a.asset_id);
+          if (!realAssetId) return null;
+          return { ...a, asset_id: realAssetId };
+        })
+        .filter(Boolean);
+      return { ...m, capability_id: realCapId, supporting_assets };
+    })
+    .filter(Boolean);
+
+  return { mappings };
 }
 
 // ── Asset mapping persistence ─────────────────────────────────────────────────
@@ -334,7 +367,52 @@ export async function getAssetMappingsForOrg(orgId: number) {
   const { data, error } = await supabase
     .from('asset_capability_mappings')
     .select('*, business_capabilities(name,level), it_assets(name,type)')
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .order('created_at', { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+export async function clearAssetMappings(orgId: number): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  const { error } = await supabase
+    .from('asset_capability_mappings')
+    .delete()
+    .eq('org_id', orgId);
+  if (error) throw error;
+}
+
+export async function deleteAssetMapping(id: string): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  const { error } = await supabase
+    .from('asset_capability_mappings')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function addSingleAssetMapping(
+  orgId: number,
+  assetId: string,
+  capabilityId: string,
+  relationshipType: 'primary' | 'secondary' | 'enabling',
+  userId: string,
+  rationale = '',
+): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  const { error } = await supabase
+    .from('asset_capability_mappings')
+    .upsert(
+      {
+        org_id: orgId,
+        asset_id: assetId,
+        capability_id: capabilityId,
+        mapping_type: 'manual',           // DB constraint: manual | ai_suggested | confirmed
+        confidence_score: 1.0,
+        rationale: `[${relationshipType}]${rationale ? ' ' + rationale : ''}`,
+        created_by: userId,
+      },
+      { onConflict: 'asset_id,capability_id' },
+    );
+  if (error) throw error;
 }

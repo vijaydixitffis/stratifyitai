@@ -1,3 +1,86 @@
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --sky:        #1a6fb5;
+  --sky-bright: #2f8fdb;
+  --sky-deep:   #145a93;
+  --slate:      #2c3e50;
+  --grey:       #6b7a8d;
+  --ghost:      #e4e8ed;
+  --ghost-2:    #f4f6f9;
+  --ink:        #0d1117;
+  --ink-2:      #141e2c;
+  --white:      #ffffff;
+
+  --sky-50:  #eef5fb;
+  --sky-100: #d6e6f4;
+  --sky-200: #aacce8;
+  --sky-300: #6ba6d6;
+  --sky-400: #2f8fdb;
+  --sky-500: #1a6fb5;
+  --sky-600: #145a93;
+  --sky-700: #0f4570;
+
+  --n-50:  #f4f6f9;
+  --n-100: #e4e8ed;
+  --n-200: #cfd6df;
+  --n-300: #aab4c0;
+  --n-400: #8794a3;
+  --n-500: #6b7a8d;
+  --n-600: #4d5c6e;
+  --n-700: #2c3e50;
+  --n-800: #1a2735;
+  --n-900: #0d1117;
+
+  --success: #2f8f6b;
+  --warning: #b07d1a;
+  --danger:  #c0473a;
+  --info:    #1a6fb5;
+
+  --rag-red:   #c0473a;
+  --rag-amber: #b07d1a;
+  --rag-green: #2f8f6b;
+
+  --fg-1: #0d1117;
+  --fg-2: #2c3e50;
+  --fg-3: #6b7a8d;
+  --fg-4: #8794a3;
+
+  --fgd-1: #ffffff;
+  --fgd-2: #c5d0dd;
+  --fgd-3: #8899aa;
+  --fgd-4: #5a6b7e;
+
+  --surface:       #ffffff;
+  --surface-sunk:  #f4f6f9;
+  --surface-dark:  #0d1117;
+  --surface-dark-2:#141e2c;
+  --border:        #e4e8ed;
+  --border-strong: #cfd6df;
+  --border-dark:   #22384e;
+
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-text:    'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+
+  --r-xs:  6px;
+  --r-sm:  10px;
+  --r-md:  14px;
+  --r-lg:  20px;
+  --r-pill:999px;
+
+  --sh-sm: 0 1px 3px rgba(13,17,23,.08), 0 1px 2px rgba(13,17,23,.04);
+  --sh-md: 0 4px 16px rgba(20,30,44,.08), 0 1px 3px rgba(20,30,44,.05);
+  --sh-lg: 0 12px 36px rgba(20,30,44,.12), 0 3px 8px rgba(20,30,44,.06);
+  --sh-sky:0 10px 30px rgba(26,111,181,.28);
+}
+
+body {
+  font-family: var(--font-text);
+  background-color: var(--ghost-2);
+  color: var(--fg-1);
+}

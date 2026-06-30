@@ -16,20 +16,29 @@ async function callGemini(prompt: string, maxTokens = 8192): Promise<string> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3 },
+      generationConfig: { maxOutputTokens: maxTokens, temperature: 0.3, thinkingConfig: { thinkingBudget: 0 } },
     }),
   });
   if (!res.ok) throw new Error(`Gemini ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const text = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  const finishReason = data.candidates?.[0]?.finishReason;
+  if (finishReason === "MAX_TOKENS") {
+    throw new Error(`Gemini response truncated (MAX_TOKENS). Increase maxTokens or reduce input size.`);
+  }
+  return text;
 }
 
 function parseJSON(raw: string): unknown {
   const clean = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  // Extract first JSON array or object
   const start = clean.search(/[\[{]/);
   if (start === -1) throw new Error("No JSON found in response");
-  return JSON.parse(clean.slice(start));
+  try {
+    return JSON.parse(clean.slice(start));
+  } catch (e) {
+    const snippet = clean.slice(start, start + 120);
+    throw new Error(`JSON parse failed (response likely truncated). First 120 chars: ${snippet}`);
+  }
 }
 
 // ── Action: generate capability model from Q&A answers ───────────────────────
@@ -103,39 +112,19 @@ Return ONLY a valid JSON array matching this exact schema (no prose, no markdown
   }
 ]`;
 
-  const raw = await callGemini(prompt, 12000);
+  const raw = await callGemini(prompt, 32768);
   const capabilities = parseJSON(raw);
   return { capabilities };
 }
 
 // ── Action: suggest asset-to-capability mappings ──────────────────────────────
-async function mapAssets(body: {
-  capabilities: { id: string; name: string; description: string; level: number }[];
-  assets: { id: string; name: string; type: string; description: string; tags: string[]; category: string }[];
-}) {
-  const { capabilities, assets } = body;
+const CAPS_PER_BATCH = 25;
 
-  if (!capabilities?.length || !assets?.length) {
-    return { mappings: [] };
-  }
-
-  const capsStr = JSON.stringify(
-    capabilities.map(c => ({ id: c.id, name: c.name, description: c.description })),
-    null,
-    2,
-  );
-  const assetsStr = JSON.stringify(
-    assets.map(a => ({
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      category: a.category,
-      description: a.description,
-      tags: a.tags,
-    })),
-    null,
-    2,
-  );
+async function mapAssetsBatch(
+  capsBatch: { id: string; name: string; description: string }[],
+  assetsStr: string,
+): Promise<unknown[]> {
+  const capsStr = JSON.stringify(capsBatch, null, 2);
 
   const prompt = `You are a senior IT architect performing a business capability to IT asset mapping.
 
@@ -173,8 +162,42 @@ Return ONLY a valid JSON array (no prose, no markdown):
 
 Only include capabilities that have at least one matching asset. Omit capabilities with no matches.`;
 
-  const raw = await callGemini(prompt, 16000);
-  const mappings = parseJSON(raw);
+  const raw = await callGemini(prompt, 65536);
+  return parseJSON(raw) as unknown[];
+}
+
+async function mapAssets(body: {
+  capabilities: { id: string; name: string; description: string; level: number }[];
+  assets: { id: string; name: string; type: string; description: string; tags: string[]; category: string }[];
+}) {
+  const { capabilities, assets } = body;
+
+  if (!capabilities?.length || !assets?.length) {
+    return { mappings: [] };
+  }
+
+  const assetsStr = JSON.stringify(
+    assets.map(a => ({
+      id: a.id,
+      name: a.name,
+      type: a.type,
+      category: a.category,
+      description: a.description,
+      tags: a.tags,
+    })),
+    null,
+    2,
+  );
+
+  const capsMapped = capabilities.map(c => ({ id: c.id, name: c.name, description: c.description }));
+
+  const batches: typeof capsMapped[] = [];
+  for (let i = 0; i < capsMapped.length; i += CAPS_PER_BATCH) {
+    batches.push(capsMapped.slice(i, i + CAPS_PER_BATCH));
+  }
+
+  const batchResults = await Promise.all(batches.map(batch => mapAssetsBatch(batch, assetsStr)));
+  const mappings = batchResults.flat();
   return { mappings };
 }
 

@@ -122,23 +122,38 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const processUser = async (authUser: any) => {
     try {
       console.log('AuthProvider: Processing user:', authUser.id, authUser.email);
-      
-      // Extract user data from auth user metadata
+
       const userData = authUser.user_metadata || {};
-      
+      const rawOrgCode = userData.orgCode || (userData.role?.startsWith('admin') ? 'ADMIN' : '');
+      const rawOrgId   = userData.org_id as number | undefined;
+      let orgName: string = userData.organization || '';
+
+      // Look up org name from DB when metadata doesn't carry it
+      if (!orgName && supabase && isSupabaseConfigured() && rawOrgCode !== 'ADMIN') {
+        if (rawOrgId) {
+          const { data } = await supabase
+            .from('client_orgs').select('org_name').eq('org_id', rawOrgId).single();
+          if (data?.org_name) orgName = data.org_name;
+        } else if (rawOrgCode) {
+          const { data } = await supabase
+            .from('client_orgs').select('org_name').eq('org_code', rawOrgCode).single();
+          if (data?.org_name) orgName = data.org_name;
+        }
+      }
+
       const appUser: User = {
         id: authUser.id,
-        name: userData.name || authUser.email?.split('@')[0] || 'Unknown User',
+        name: userData.name || authUser.email?.split('@')[0] || 'User',
         email: authUser.email || '',
         role: userData.role || 'client-manager',
-        organization: userData.organization || 'Unknown Organization',
-        orgCode: userData.orgCode || (userData.role === 'admin' ? 'ADMIN' : 'UNKNOWN'),
-        org_id: userData.org_id || undefined
+        organization: orgName || '',
+        orgCode: rawOrgCode || 'UNKNOWN',
+        org_id: rawOrgId,
       };
-      
+
       console.log('AuthProvider: Setting user data:', appUser.name, appUser.role, appUser.orgCode);
       setUser(appUser);
-      
+
     } catch (error) {
       console.error('AuthProvider: Error processing user:', error);
       setUser(null);

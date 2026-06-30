@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Save, Loader2,
   AlertCircle, CheckCircle, Star, Upload, Sparkles, Network,
-  X, Check,
+  X, Check, RefreshCw, Pencil, Search,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSelectedOrg } from '../../contexts/SelectedOrgContext';
@@ -10,6 +10,7 @@ import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import {
   parseCSV, parseExcel, rowsToTree, importCapabilityTree,
   generateCapabilityModel, getAssetMappingSuggestions, saveAssetMappings,
+  getAssetMappingsForOrg, clearAssetMappings, deleteAssetMapping, addSingleAssetMapping,
   CapabilityNode, FlatCapability, MappingSuggestion, ParsedRow,
 } from '../../services/capabilityService';
 
@@ -558,17 +559,128 @@ interface AssetMapperModalProps {
   onClose: () => void;
 }
 
+type ExistingMapping = {
+  id: string;
+  capability_id: string;
+  asset_id: string;
+  confidence_score: number;
+  mapping_type: string;
+  rationale: string;
+  business_capabilities: { name: string; level: number } | null;
+  it_assets: { name: string; type: string } | null;
+};
+
+type MapperStep = 'init' | 'view' | 'ai-running' | 'review' | 'saving' | 'done';
+
+const MappingTable: React.FC<{
+  rows: { capName: string; assetName: string; assetType?: string; confidence: number; mappingType: string; rationale: string }[];
+  selectable?: boolean;
+  accepted?: Set<string>;
+  rowKey?: (i: number) => string;
+  onToggle?: (key: string) => void;
+  onDelete?: (i: number) => void;
+}> = ({ rows, selectable, accepted, rowKey, onToggle, onDelete }) => (
+  <div className="flex-1 overflow-y-auto border border-gray-100 rounded-lg">
+    <table className="w-full text-sm min-w-[560px]">
+      <thead className="bg-gray-50 sticky top-0 z-10">
+        <tr>
+          {selectable && <th className="w-8 px-3 py-2.5" />}
+          <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Capability</th>
+          <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Asset</th>
+          <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500 w-28">Confidence</th>
+          <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500 w-24">Type</th>
+          {onDelete && <th className="w-8 px-3 py-2.5" />}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((m, i) => {
+          const key = rowKey ? rowKey(i) : String(i);
+          const isAcc = selectable ? accepted?.has(key) : false;
+          return (
+            <tr key={i} className={`border-t border-gray-50 transition-colors ${isAcc ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}>
+              {selectable && (
+                <td className="px-3 py-2.5">
+                  <button onClick={() => onToggle?.(key)}
+                    className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${
+                      isAcc ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-green-400'
+                    }`}>
+                    {isAcc && <Check className="h-3 w-3" />}
+                  </button>
+                </td>
+              )}
+              <td className="px-3 py-2.5 font-medium text-gray-800 max-w-[200px]">
+                <span className="block truncate" title={m.rationale ? `${m.capName} — ${m.rationale}` : m.capName}>
+                  {m.capName}
+                </span>
+              </td>
+              <td className="px-3 py-2.5 text-gray-600 max-w-[160px]">
+                <span className="block truncate" title={m.assetName}>{m.assetName}</span>
+                {m.assetType && <span className="block text-xs text-gray-400">{m.assetType}</span>}
+              </td>
+              <td className="px-3 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden flex-shrink-0">
+                    <div className={`h-full rounded-full ${confColor(m.confidence)}`}
+                      style={{ width: `${Math.round(m.confidence * 100)}%` }} />
+                  </div>
+                  <span className="text-xs text-gray-500">{Math.round(m.confidence * 100)}%</span>
+                </div>
+              </td>
+              <td className="px-3 py-2.5">
+                <span className={`text-xs px-1.5 py-0.5 rounded-full whitespace-nowrap ${
+                  m.mappingType === 'primary' ? 'bg-blue-100 text-blue-700' :
+                  m.mappingType === 'ai_suggested' ? 'bg-blue-100 text-blue-700' :
+                  m.mappingType === 'secondary' ? 'bg-purple-100 text-purple-700' :
+                  m.mappingType === 'enabling' ? 'bg-teal-100 text-teal-700' :
+                  m.mappingType === 'manual' ? 'bg-green-100 text-green-700' :
+                  'bg-gray-100 text-gray-600'
+                }`}>{m.mappingType}</span>
+              </td>
+              {onDelete && (
+                <td className="px-2 py-2.5">
+                  <button onClick={() => onDelete(i)} title="Remove mapping"
+                    className="text-gray-300 hover:text-red-500 transition-colors p-0.5 rounded">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </td>
+              )}
+            </tr>
+          );
+        })}
+        {!rows.length && (
+          <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No mappings found.</td></tr>
+        )}
+      </tbody>
+    </table>
+  </div>
+);
+
 const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capabilities, onClose }) => {
-  const [step, setStep] = useState<'loading' | 'review' | 'saving' | 'done'>('loading');
+  const [step, setStep] = useState<MapperStep>('init');
+  const [existing, setExisting] = useState<ExistingMapping[]>([]);
   const [flatMappings, setFlatMappings] = useState<FlatMapping[]>([]);
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [savedCount, setSavedCount] = useState(0);
+  const [showManualEdit, setShowManualEdit] = useState(false);
 
-  useEffect(() => { runMapping(); }, []);
+  useEffect(() => { loadExisting(); }, []);
+
+  const loadExisting = async () => {
+    try {
+      const data = await getAssetMappingsForOrg(orgId) as ExistingMapping[];
+      setExisting(data);
+      setStep(data.length > 0 ? 'view' : 'ai-running');
+      if (!data.length) runMapping();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to load mappings.');
+      setStep('view');
+    }
+  };
 
   const runMapping = async () => {
     setError(null);
+    setStep('ai-running');
     try {
       const leafCaps = flattenLeafCaps(capabilities);
       if (!leafCaps.length) throw new Error('No leaf capabilities found. Add capabilities first.');
@@ -584,11 +696,8 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
       if (!assetData?.length) throw new Error('No IT assets found. Upload assets first.');
 
       const assets = assetData.map((a: any) => ({
-        id: a.id,
-        name: a.name ?? '',
-        type: a.type ?? '',
-        category: a.category ?? '',
-        description: a.description ?? '',
+        id: a.id, name: a.name ?? '', type: a.type ?? '',
+        category: a.category ?? '', description: a.description ?? '',
         tags: Array.isArray(a.tags) ? a.tags : [],
       }));
 
@@ -599,33 +708,33 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
       for (const s of suggestions) {
         for (const asset of s.supporting_assets) {
           flat.push({
-            capId: s.capability_id,
-            capName: s.capability_name,
-            assetId: asset.asset_id,
-            assetName: asset.asset_name,
-            confidence: asset.confidence,
-            displayType: asset.mapping_type,
+            capId: s.capability_id, capName: s.capability_name,
+            assetId: asset.asset_id, assetName: asset.asset_name,
+            confidence: asset.confidence, displayType: asset.mapping_type,
             rationale: asset.rationale,
           });
         }
       }
 
-      // Default: pre-accept high confidence (>= 0.70)
       const defaultAccepted = new Set(
         flat.filter(m => m.confidence >= 0.7).map(m => `${m.capId}|${m.assetId}`)
       );
-
       setFlatMappings(flat);
       setAccepted(defaultAccepted);
       setStep('review');
     } catch (e: any) {
       setError(e?.message ?? 'Failed to generate mappings.');
-      setStep('review');
+      setStep(existing.length > 0 ? 'view' : 'review');
     }
   };
 
-  const toggleAccept = (capId: string, assetId: string) => {
-    const key = `${capId}|${assetId}`;
+  const handleRedoMapping = () => {
+    setFlatMappings([]);
+    setAccepted(new Set());
+    runMapping();
+  };
+
+  const toggleAccept = (key: string) => {
     setAccepted(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); return next; });
   };
 
@@ -634,13 +743,12 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
     const toSave = flatMappings
       .filter(m => accepted.has(`${m.capId}|${m.assetId}`))
       .map(m => ({
-        assetId: m.assetId,
-        capabilityId: m.capId,
-        confidence: m.confidence,
-        mappingType: 'ai_suggested' as const,
+        assetId: m.assetId, capabilityId: m.capId,
+        confidence: m.confidence, mappingType: 'ai_suggested' as const,
         rationale: `[${m.displayType}] ${m.rationale}`,
       }));
     try {
+      await clearAssetMappings(orgId);
       await saveAssetMappings(orgId, toSave, userId);
       setSavedCount(toSave.length);
       setStep('done');
@@ -652,17 +760,46 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
 
   const acceptedCount = accepted.size;
 
+  const titles: Record<MapperStep, string> = {
+    init: 'Loading Mappings…',
+    view: 'Capability → Asset Mappings',
+    'ai-running': 'Mapping Capabilities to Assets…',
+    review: 'Review AI Suggestions',
+    saving: 'Saving Mappings…',
+    done: 'Mappings Saved',
+  };
+
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <Network className="h-5 w-5 text-green-600" />
-            <h2 className="text-base font-semibold text-gray-900">Map Capabilities to IT Assets</h2>
+            <h2 className="text-base font-semibold text-gray-900">{titles[step]}</h2>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+          <div className="flex items-center gap-2">
+            {step === 'view' && (
+              <>
+                <button onClick={() => setShowManualEdit(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-blue-200 text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                  <Pencil className="h-3.5 w-3.5" />
+                  Edit Manually
+                </button>
+                <button onClick={handleRedoMapping}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-orange-200 text-orange-700 bg-orange-50 rounded-lg hover:bg-orange-100 transition-colors">
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Redo Mapping
+                </button>
+              </>
+            )}
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+          </div>
         </div>
 
+        {/* Body */}
         <div className="flex-1 overflow-hidden flex flex-col px-6 py-5">
           {error && (
             <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 mb-4">
@@ -670,21 +807,49 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
             </div>
           )}
 
-          {step === 'loading' && (
+          {(step === 'init' || step === 'ai-running') && (
             <div className="flex flex-col items-center py-16 gap-4">
               <Loader2 className="h-12 w-12 animate-spin text-green-600" />
-              <p className="text-gray-700 font-medium">AI is mapping capabilities to assets…</p>
-              <p className="text-gray-400 text-sm text-center max-w-sm">
-                Analysing leaf-level capabilities against your IT asset inventory. This may take 20–40 seconds.
+              <p className="text-gray-700 font-medium">
+                {step === 'init' ? 'Loading existing mappings…' : 'AI is mapping capabilities to assets…'}
               </p>
+              {step === 'ai-running' && (
+                <p className="text-gray-400 text-sm text-center max-w-sm">
+                  Analysing leaf-level capabilities against your IT asset inventory. This may take 20–40 seconds.
+                </p>
+              )}
             </div>
+          )}
+
+          {step === 'view' && (
+            <>
+              <p className="text-sm text-gray-500 mb-3">
+                <span className="font-semibold text-gray-800">{existing.length}</span> saved mapping{existing.length !== 1 ? 's' : ''}.
+                Hover a capability name to see its rationale.
+              </p>
+              <MappingTable
+                rows={existing.map(m => ({
+                  capName: m.business_capabilities?.name ?? m.capability_id,
+                  assetName: m.it_assets?.name ?? m.asset_id,
+                  assetType: m.it_assets?.type,
+                  confidence: m.confidence_score,
+                  mappingType: m.mapping_type,
+                  rationale: m.rationale,
+                }))}
+                onDelete={async (i) => {
+                  const target = existing[i];
+                  await deleteAssetMapping(target.id);
+                  setExisting(prev => prev.filter((_, idx) => idx !== i));
+                }}
+              />
+            </>
           )}
 
           {step === 'review' && (
             <>
               <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                 <p className="text-sm text-gray-600">
-                  <span className="font-semibold text-gray-900">{flatMappings.length}</span> suggested mappings ·{' '}
+                  <span className="font-semibold text-gray-900">{flatMappings.length}</span> suggested ·{' '}
                   <span className="font-semibold text-green-700">{acceptedCount} accepted</span>
                   <span className="text-gray-400 ml-2 text-xs">(≥70% confidence pre-selected)</span>
                 </p>
@@ -699,67 +864,17 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
                   </button>
                 </div>
               </div>
-
-              <div className="flex-1 overflow-y-auto border border-gray-100 rounded-lg">
-                <table className="w-full text-sm min-w-[640px]">
-                  <thead className="bg-gray-50 sticky top-0 z-10">
-                    <tr>
-                      <th className="w-8 px-3 py-2.5"></th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Capability</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Asset</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500 w-28">Confidence</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500 w-24">Type</th>
-                      <th className="text-left px-3 py-2.5 text-xs font-medium text-gray-500">Rationale</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {flatMappings.map((m, i) => {
-                      const key = `${m.capId}|${m.assetId}`;
-                      const isAcc = accepted.has(key);
-                      return (
-                        <tr key={i} className={`border-t border-gray-50 transition-colors ${isAcc ? 'bg-green-50/40' : 'hover:bg-gray-50'}`}>
-                          <td className="px-3 py-2.5">
-                            <button onClick={() => toggleAccept(m.capId, m.assetId)}
-                              className={`w-5 h-5 rounded flex items-center justify-center border transition-colors ${
-                                isAcc ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 hover:border-green-400'
-                              }`}>
-                              {isAcc && <Check className="h-3 w-3" />}
-                            </button>
-                          </td>
-                          <td className="px-3 py-2.5 font-medium text-gray-800 max-w-[180px]">
-                            <span className="block truncate" title={m.capName}>{m.capName}</span>
-                          </td>
-                          <td className="px-3 py-2.5 text-gray-600 max-w-[160px]">
-                            <span className="block truncate" title={m.assetName}>{m.assetName}</span>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center gap-1.5">
-                              <div className="w-14 h-1.5 bg-gray-200 rounded-full overflow-hidden flex-shrink-0">
-                                <div className={`h-full rounded-full ${confColor(m.confidence)}`}
-                                  style={{ width: `${Math.round(m.confidence * 100)}%` }} />
-                              </div>
-                              <span className="text-xs text-gray-500">{Math.round(m.confidence * 100)}%</span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <span className={`text-xs px-1.5 py-0.5 rounded-full whitespace-nowrap ${
-                              m.displayType === 'primary' ? 'bg-blue-100 text-blue-700' :
-                              m.displayType === 'secondary' ? 'bg-purple-100 text-purple-700' :
-                              'bg-gray-100 text-gray-600'
-                            }`}>{m.displayType}</span>
-                          </td>
-                          <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[200px]">
-                            <span className="block truncate" title={m.rationale}>{m.rationale}</span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {!flatMappings.length && !error && (
-                      <tr><td colSpan={6} className="px-4 py-10 text-center text-gray-400 text-sm">No mappings generated.</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <MappingTable
+                rows={flatMappings.map(m => ({
+                  capName: m.capName, assetName: m.assetName,
+                  confidence: m.confidence, mappingType: m.displayType,
+                  rationale: m.rationale,
+                }))}
+                selectable
+                accepted={accepted}
+                rowKey={i => `${flatMappings[i].capId}|${flatMappings[i].assetId}`}
+                onToggle={toggleAccept}
+              />
             </>
           )}
 
@@ -774,11 +889,12 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
             <div className="flex flex-col items-center py-12 gap-4">
               <CheckCircle className="h-14 w-14 text-green-500" />
               <p className="text-gray-800 font-semibold text-lg">{savedCount} mapping{savedCount !== 1 ? 's' : ''} saved</p>
-              <p className="text-gray-400 text-sm">Capability-to-asset mappings have been saved successfully.</p>
+              <p className="text-gray-400 text-sm">All previous mappings were replaced.</p>
             </div>
           )}
         </div>
 
+        {/* Footer */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
           <button onClick={onClose}
             className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg transition-colors">
@@ -791,6 +907,385 @@ const AssetMapperModal: React.FC<AssetMapperModalProps> = ({ orgId, userId, capa
               Save {acceptedCount} mapping{acceptedCount !== 1 ? 's' : ''}
             </button>
           )}
+        </div>
+      </div>
+    </div>
+
+    {showManualEdit && (
+      <ManualMappingModal
+        orgId={orgId}
+        userId={userId}
+        onClose={() => {
+          setShowManualEdit(false);
+          loadExisting();
+        }}
+      />
+    )}
+    </>
+  );
+};
+
+// ── Manual Mapping Modal ──────────────────────────────────────────────────────
+
+interface ManualMappingModalProps {
+  orgId: number;
+  userId: string;
+  initialAssetId?: string;
+  onClose: () => void;
+}
+
+type ManualMapping = {
+  id: string;
+  capability_id: string;
+  mapping_type: string;
+  rationale: string;
+  business_capabilities: { name: string } | null;
+};
+
+type AssetOption = { id: string; name: string; type: string; status: string; criticality: string; description: string; owner: string; vendor?: string };
+type CapOption = { id: string; name: string; level: number; parent_id: string | null };
+
+function buildBreadcrumb(capId: string, allCaps: CapOption[]): string {
+  const parts: string[] = [];
+  let current = allCaps.find(c => c.id === capId);
+  while (current) {
+    parts.unshift(current.name);
+    current = current.parent_id ? allCaps.find(c => c.id === current!.parent_id) : undefined;
+  }
+  return parts.join(' › ');
+}
+
+const LEVEL_BADGE: Record<number, string> = {
+  1: 'bg-violet-100 text-violet-700',
+  2: 'bg-blue-100 text-blue-700',
+  3: 'bg-teal-100 text-teal-700',
+};
+
+export const ManualMappingModal: React.FC<ManualMappingModalProps> = ({ orgId, userId, initialAssetId, onClose }) => {
+  const [assets, setAssets]         = useState<AssetOption[]>([]);
+  const [allCaps, setAllCaps]       = useState<CapOption[]>([]);
+  const [selectedId, setSelectedId] = useState(initialAssetId ?? '');
+  const [mappings, setMappings]     = useState<ManualMapping[]>([]);
+  const [addL1Id, setAddL1Id]       = useState('');
+  const [addL2Id, setAddL2Id]       = useState('');
+  const [addL3Id, setAddL3Id]       = useState('');
+  const [addType, setAddType]       = useState<'primary' | 'secondary' | 'enabling'>('primary');
+  const [adding, setAdding]         = useState(false);
+  const [loadingMappings, setLoadingMappings] = useState(false);
+  const [error, setError]           = useState<string | null>(null);
+  const [assetSearch, setAssetSearch] = useState('');
+
+  useEffect(() => { fetchStaticData(); }, []);
+  useEffect(() => { if (selectedId) fetchMappings(selectedId); }, [selectedId]);
+
+  const fetchStaticData = async () => {
+    if (!isSupabaseConfigured() || !supabase) return;
+    const [assetRes, capRes] = await Promise.all([
+      supabase.from('it_assets').select('id, name, type, status, criticality, description, owner, vendor').eq('org_id', orgId).order('name'),
+      supabase.from('business_capabilities').select('id, name, level, parent_id').eq('org_id', orgId).order('level').order('sort_order'),
+    ]);
+    if (assetRes.data) setAssets(assetRes.data as AssetOption[]);
+    if (capRes.data) setAllCaps(capRes.data as CapOption[]);
+    if (!initialAssetId && assetRes.data?.length) setSelectedId(assetRes.data[0].id);
+  };
+
+  const fetchMappings = async (assetId: string) => {
+    if (!isSupabaseConfigured() || !supabase) return;
+    setLoadingMappings(true);
+    const { data } = await supabase
+      .from('asset_capability_mappings')
+      .select('id, capability_id, mapping_type, rationale, business_capabilities(name)')
+      .eq('org_id', orgId)
+      .eq('asset_id', assetId)
+      .order('created_at', { ascending: false });
+    setMappings((data ?? []) as unknown as ManualMapping[]);
+    setLoadingMappings(false);
+  };
+
+  const resetAddState = () => { setAddL1Id(''); setAddL2Id(''); setAddL3Id(''); };
+
+  const handleAdd = async () => {
+    const capId = addL3Id || addL2Id || addL1Id;
+    if (!capId || !selectedId) return;
+    setAdding(true);
+    setError(null);
+    try {
+      await addSingleAssetMapping(orgId, selectedId, capId, addType, userId);
+      await fetchMappings(selectedId);
+      resetAddState();
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to add mapping.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleDelete = async (mapping: ManualMapping) => {
+    try {
+      await deleteAssetMapping(mapping.id);
+      setMappings(prev => prev.filter(m => m.id !== mapping.id));
+    } catch (e: any) {
+      setError(e?.message ?? 'Failed to delete mapping.');
+    }
+  };
+
+  const selectedAsset  = assets.find(a => a.id === selectedId);
+  const mappedCapIds   = new Set(mappings.map(m => m.capability_id));
+  const filteredAssets = assetSearch
+    ? assets.filter(a => a.name.toLowerCase().includes(assetSearch.toLowerCase()))
+    : assets;
+
+  // Cascading cap lists (exclude already-mapped caps at each level)
+  const l1Caps = allCaps.filter(c => c.level === 1 && !mappedCapIds.has(c.id));
+  const l2Caps = addL1Id ? allCaps.filter(c => c.level === 2 && c.parent_id === addL1Id && !mappedCapIds.has(c.id)) : [];
+  const l3Caps = addL2Id ? allCaps.filter(c => c.level === 3 && c.parent_id === addL2Id && !mappedCapIds.has(c.id)) : [];
+  const selectedCapId = addL3Id || addL2Id || addL1Id;
+  const selectedCapLevel = addL3Id ? 3 : addL2Id ? 2 : addL1Id ? 1 : 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <Pencil className="h-5 w-5 text-blue-600" />
+            <h2 className="text-base font-semibold text-gray-900">Edit Capability Mappings</h2>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+        </div>
+
+        {error && (
+          <div className="mx-6 mt-4 flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3">
+            <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />{error}
+          </div>
+        )}
+
+        {/* Two-panel body */}
+        <div className="flex-1 overflow-hidden flex">
+
+          {/* Left — capability management */}
+          <div className="flex-1 flex flex-col border-r border-gray-100 px-6 py-5 overflow-hidden">
+
+            {/* Asset selector */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Asset</label>
+              <div className="relative mb-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
+                <input
+                  value={assetSearch}
+                  onChange={e => setAssetSearch(e.target.value)}
+                  placeholder="Search assets…"
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-blue-400 focus:border-blue-400 focus:outline-none"
+                />
+              </div>
+              <select
+                value={selectedId}
+                onChange={e => { setSelectedId(e.target.value); resetAddState(); }}
+                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-1 focus:ring-blue-400 focus:border-blue-400 focus:outline-none bg-white"
+                size={Math.min(filteredAssets.length + 1, 4)}
+              >
+                {filteredAssets.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Mapped capabilities list */}
+            <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Mapped capabilities</p>
+            <div className="flex-1 overflow-y-auto border border-gray-100 rounded-lg mb-4">
+              {loadingMappings ? (
+                <div className="flex items-center justify-center py-8 gap-2 text-gray-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm">Loading…</span>
+                </div>
+              ) : mappings.length === 0 ? (
+                <p className="px-4 py-8 text-center text-sm text-gray-400">No capabilities mapped yet.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <tbody>
+                    {mappings.map(m => {
+                      const cap = allCaps.find(c => c.id === m.capability_id);
+                      const breadcrumb = allCaps.length ? buildBreadcrumb(m.capability_id, allCaps) : (m.business_capabilities?.name ?? m.capability_id);
+                      return (
+                        <tr key={m.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50 group">
+                          <td className="px-3 py-2.5 w-6">
+                            {cap && (
+                              <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${LEVEL_BADGE[cap.level] ?? 'bg-gray-100 text-gray-600'}`}>
+                                L{cap.level}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-gray-800">
+                            <span className="block text-xs text-gray-400 leading-none mb-0.5">{breadcrumb.split(' › ').slice(0, -1).join(' › ')}</span>
+                            <span className="font-medium">{m.business_capabilities?.name ?? m.capability_id}</span>
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            {(() => {
+                              const rel = m.rationale?.match(/^\[(primary|secondary|enabling|ai_suggested|confirmed|manual)\]/)?.[1] ?? m.mapping_type;
+                              return (
+                                <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                  rel === 'primary'      ? 'bg-blue-100 text-blue-700' :
+                                  rel === 'secondary'    ? 'bg-purple-100 text-purple-700' :
+                                  rel === 'enabling'     ? 'bg-teal-100 text-teal-700' :
+                                  rel === 'ai_suggested' ? 'bg-orange-100 text-orange-700' :
+                                  'bg-green-100 text-green-700'
+                                }`}>{rel}</span>
+                              );
+                            })()}
+                          </td>
+                          <td className="px-2 py-2.5 text-right">
+                            <button onClick={() => handleDelete(m)} title="Remove"
+                              className="text-gray-200 group-hover:text-red-400 hover:text-red-600 transition-colors p-0.5 rounded">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Add capability — cascading L1 → L2 → L3 */}
+            <div className="border-t border-gray-100 pt-4">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Add capability</p>
+                <p className="text-xs text-gray-400">
+                  Can't find one?{' '}
+                  <a href="/landscape" className="text-blue-500 hover:text-blue-700 hover:underline">
+                    Add it on the Capabilities page →
+                  </a>
+                </p>
+              </div>
+              <div className="space-y-2 mb-3">
+                {/* L1 */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded w-7 text-center flex-shrink-0 ${LEVEL_BADGE[1]}`}>L1</span>
+                  <select
+                    value={addL1Id}
+                    onChange={e => { setAddL1Id(e.target.value); setAddL2Id(''); setAddL3Id(''); }}
+                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-blue-400 focus:border-blue-400 focus:outline-none bg-white"
+                  >
+                    <option value="">Select domain…</option>
+                    {l1Caps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                {/* L2 */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded w-7 text-center flex-shrink-0 ${addL1Id ? LEVEL_BADGE[2] : 'bg-gray-100 text-gray-300'}`}>L2</span>
+                  <select
+                    value={addL2Id}
+                    onChange={e => { setAddL2Id(e.target.value); setAddL3Id(''); }}
+                    disabled={!addL1Id}
+                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-blue-400 focus:border-blue-400 focus:outline-none bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <option value="">{addL1Id ? (l2Caps.length ? 'Select sub-domain…' : '— no sub-domains —') : 'Select L1 first…'}</option>
+                    {l2Caps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                {/* L3 */}
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded w-7 text-center flex-shrink-0 ${addL2Id && l3Caps.length ? LEVEL_BADGE[3] : 'bg-gray-100 text-gray-300'}`}>L3</span>
+                  <select
+                    value={addL3Id}
+                    onChange={e => setAddL3Id(e.target.value)}
+                    disabled={!addL2Id || l3Caps.length === 0}
+                    className="flex-1 text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:ring-1 focus:ring-blue-400 focus:border-blue-400 focus:outline-none bg-white disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <option value="">{addL2Id ? (l3Caps.length ? 'Select process…' : '— no processes —') : 'Select L2 first…'}</option>
+                    {l3Caps.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Selected capability preview + type + Add */}
+              <div className="flex gap-2 items-center">
+                <div className="flex-1 min-w-0">
+                  {selectedCapId ? (
+                    <p className="text-xs text-gray-600 truncate">
+                      <span className={`font-bold mr-1 px-1 py-0.5 rounded text-xs ${LEVEL_BADGE[selectedCapLevel]}`}>L{selectedCapLevel}</span>
+                      {buildBreadcrumb(selectedCapId, allCaps)}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-gray-300">Select at least L1 to map</p>
+                  )}
+                </div>
+                <div className="flex-shrink-0">
+                  <select
+                    value={addType}
+                    onChange={e => setAddType(e.target.value as any)}
+                    className="text-sm border border-gray-200 rounded-lg px-2 py-1.5 focus:ring-1 focus:ring-blue-400 focus:border-blue-400 focus:outline-none bg-white"
+                  >
+                    <option value="primary">Primary</option>
+                    <option value="secondary">Secondary</option>
+                    <option value="enabling">Enabling</option>
+                  </select>
+                </div>
+                <button onClick={handleAdd} disabled={!selectedCapId || adding}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                  {adding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                  Add
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Right — fixed asset detail */}
+          <div className="w-72 flex-shrink-0 px-5 py-5 bg-gray-50 overflow-y-auto">
+            {selectedAsset ? (
+              <div className="space-y-4">
+                <div>
+                  <p className="text-base font-semibold text-gray-900">{selectedAsset.name}</p>
+                  <p className="text-xs text-gray-500 capitalize mt-0.5">{selectedAsset.type.replace('-', ' ')}</p>
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      selectedAsset.status === 'active' ? 'bg-green-100 text-green-800' :
+                      selectedAsset.status === 'deprecated' ? 'bg-orange-100 text-orange-800' :
+                      'bg-gray-100 text-gray-700'
+                    }`}>{selectedAsset.status}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      selectedAsset.criticality === 'high' ? 'bg-red-100 text-red-800' :
+                      selectedAsset.criticality === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-green-100 text-green-800'
+                    }`}>{selectedAsset.criticality} criticality</span>
+                  </div>
+                </div>
+                {selectedAsset.description && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Description</p>
+                    <p className="text-xs text-gray-700 leading-relaxed">{selectedAsset.description}</p>
+                  </div>
+                )}
+                {selectedAsset.owner && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Owner</p>
+                    <p className="text-xs text-gray-800">{selectedAsset.owner}</p>
+                  </div>
+                )}
+                {selectedAsset.vendor && (
+                  <div>
+                    <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Vendor</p>
+                    <p className="text-xs text-gray-800">{selectedAsset.vendor}</p>
+                  </div>
+                )}
+                <div className="pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-400">{mappings.length} capability mapping{mappings.length !== 1 ? 's' : ''}</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center pt-8">Select an asset to begin.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 border-t border-gray-100 flex justify-end">
+          <button onClick={onClose}
+            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 border border-gray-200 rounded-lg transition-colors">
+            Done
+          </button>
         </div>
       </div>
     </div>
@@ -817,6 +1312,7 @@ const CapabilityMapper: React.FC = () => {
   const [saving, setSaving] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [savedMsg, setSavedMsg] = useState(false);
+  const [mappingCount, setMappingCount] = useState(0);
   const [showImport, setShowImport] = useState(false);
   const [showAIGen, setShowAIGen] = useState(false);
   const [showMapper, setShowMapper] = useState(false);
@@ -827,14 +1323,16 @@ const CapabilityMapper: React.FC = () => {
     if (!isSupabaseConfigured() || !supabase || !orgId) { setLoading(false); return; }
     setLoading(true);
     try {
-      const [capRes, orgRes] = await Promise.all([
+      const [capRes, orgRes, mapRes] = await Promise.all([
         supabase.from('business_capabilities').select('*').eq('org_id', orgId).order('level').order('sort_order'),
         supabase.from('client_orgs').select('mission_statement, strategic_goals').eq('org_id', orgId).single(),
+        supabase.from('asset_capability_mappings').select('id', { count: 'exact', head: true }).eq('org_id', orgId),
       ]);
       if (orgRes.data) {
         setMission(orgRes.data.mission_statement ?? '');
         setGoals(orgRes.data.strategic_goals ?? '');
       }
+      setMappingCount(mapRes.count ?? 0);
       const flat: Capability[] = (capRes.data ?? []).map((r: any) => ({ ...r, children: [] }));
       const map: Record<string, Capability> = {};
       flat.forEach(c => (map[c.id] = c));
@@ -1016,9 +1514,13 @@ const CapabilityMapper: React.FC = () => {
             </button>
             {hasCaps && (
               <button onClick={() => setShowMapper(true)}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg transition-colors ${
+                  mappingCount > 0
+                    ? 'border border-green-300 text-green-700 bg-green-50 hover:bg-green-100'
+                    : 'bg-green-600 text-white hover:bg-green-700'
+                }`}>
                 <Network className="h-4 w-4" />
-                Map to assets
+                {mappingCount > 0 ? `View Mappings (${mappingCount})` : 'Map to assets'}
               </button>
             )}
           </div>
@@ -1120,7 +1622,7 @@ const CapabilityMapper: React.FC = () => {
       )}
       {showMapper && orgId && user?.id && (
         <AssetMapperModal orgId={orgId} userId={user.id} capabilities={l1Caps}
-          onClose={() => setShowMapper(false)} />
+          onClose={() => { setShowMapper(false); loadData(); }} />
       )}
     </div>
   );
